@@ -5,7 +5,7 @@ from math import sqrt
 
 import numpy as np
 
-from .controls import draw_mouth_pressure
+from .controls import breath_envelope, draw_mouth_pressure
 from .params import ModelParams, ReedParams
 
 
@@ -22,6 +22,7 @@ STATE_SIZE = 7
 @dataclass(frozen=True)
 class DerivedValues:
     p_m: float
+    breath_envelope: float
     delta_p_b: float
     delta_p_d: float
     area_b: float
@@ -145,6 +146,7 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
 def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> DerivedValues:
     x_b, _, x_d, _, p_c, p_t, _ = state
     p_m = draw_mouth_pressure(t_s, params)
+    envelope = breath_envelope(t_s, params)
     area_b = reed_opening_area(x_b, params.blow_reed)
     area_d = reed_opening_area(x_d, params.draw_reed)
     force_b = blow_reed_force(p_m, p_c, params)
@@ -173,6 +175,7 @@ def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> Derive
     )
     return DerivedValues(
         p_m=p_m,
+        breath_envelope=envelope,
         delta_p_b=delta_p_b,
         delta_p_d=delta_p_d,
         area_b=area_b,

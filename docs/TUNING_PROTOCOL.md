@@ -257,3 +257,80 @@ Acceptance for Milestone 3C:
 - the sound remains more harmonica-like than Milestone 2
 - diagnostics show the pressure envelope
 - the report includes `attack_time`, `release_time`, and `sustain_pressure`
+
+## Milestone 3D Audible Einschwingen Baseline
+
+Milestone 3D makes the physical breath attack audible and visible. The mouth
+pressure source is now:
+
+```text
+p_m_source(t) = mouth_pressure_pa * envelope(t)
+```
+
+For the default draw note, `mouth_pressure_pa = -900 Pa`. The envelope is zero
+for `pre_delay_s`, rises with a raised-cosine attack over `attack_s`, holds
+during sustain, and releases near the end of the render over `release_s`. This
+pressure source is applied before the physical equations, so it changes
+`F_b`, `DeltaP_b`, `Q_b`, chamber pressure feedback, and the resulting reed
+motion. It is not a post-render audio fade.
+
+Default Milestone 3D controls:
+
+- duration: `2.5 s`
+- pre-delay: `0.05 s`
+- attack time: `0.35 s`
+- release time: `0.20 s`
+- release start: `2.30 s`
+- sustain pressure: `-900 Pa`
+- breath noise amount: `0`
+
+CLI controls:
+
+```text
+python run.py --attack 0.35
+python run.py --pre-delay 0.05
+python run.py --release 0.20
+python run.py --duration 2.5
+python run.py --pressure 900
+```
+
+Positive `--pressure` values are interpreted as draw suction and converted to a
+negative signed mouth pressure. Negative values are used as given.
+
+Latest default metrics from `outputs/draw_note_report.md`:
+
+- peak audio: `0.850000`
+- RMS audio: `0.373684`
+- RMS first 100 ms: `0.005430`
+- RMS sustain region 0.7-1.2 s: `0.404238`
+- attack ratio first/sustain: `0.013433`
+- estimated fundamental: `444.00 Hz`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701115`
+- spectral centroid: `652.27 Hz`
+- spectral centroid / f0: `1.47`
+- mostly sinusoidal: `no`
+- draw reed opening near closed: `48.58%`
+- chamber pressure feedback nonzero: `yes`
+- reed participation: `both reeds participate`
+
+Metric interpretation:
+
+- Attack ratio `0.013433` is below the acceptance target `< 0.35`, so the first
+  100 ms is much quieter than the sustain region.
+- Harmonic energy ratio `0.701115` and `mostly sinusoidal: no` show that the
+  Milestone 3B harmonic character survived the slower breath attack.
+- Draw reed near closure at `48.58%` confirms that reed-slot nonlinearity
+  remains active.
+- Spectral centroid / f0 `1.47` remains below the optional `2x f0` brightness
+  target, so future tuning should still focus on brightness only when stability
+  and physical coupling are preserved.
+
+Milestone 3D tuning checks:
+
+1. Inspect the diagnostics plot and confirm that both `p_m_source(t)` and
+   `envelope(t)` rise gradually.
+2. Keep `attack_ratio < 0.35` while changing physical parameters.
+3. Reject parameter sets where harmonic energy collapses or the sound becomes
+   mostly sinusoidal again.
+4. Do not use RMS normalization, per-window gain, or a cosmetic WAV fade to meet
+   the attack target.

@@ -80,7 +80,7 @@ def _sweep_candidates() -> list[tuple[str, ModelParams]]:
         ),
         (
             "moderate_draw_pressure_reference",
-            replace(base, mouth_pressure_pa=-780.0, attack_s=0.055),
+            replace(base, mouth_pressure_pa=-780.0, attack_s=0.30),
         ),
         (
             "larger_chamber_reference",
@@ -121,6 +121,9 @@ def _write_sweep_report(path: Path, name: str, metrics: dict[str, float | bool |
                 f"- Stable non-clipped output: {'yes' if metrics['stable_non_clipped'] else 'no'}",
                 f"- Peak audio: {metrics['audio_peak']:.6f}",
                 f"- RMS audio: {metrics['audio_rms']:.6f}",
+                f"- RMS first 100 ms: {metrics['rms_first_100ms']:.6f}",
+                f"- RMS sustain region 0.7-1.2 s: {metrics['rms_sustain']:.6f}",
+                f"- Attack ratio first/sustain: {metrics['attack_ratio']:.6f}",
                 f"- Estimated fundamental frequency: {metrics['fundamental_hz']:.2f} Hz",
                 f"- Harmonic energy ratio: {metrics['harmonic_energy_ratio']:.6f}",
                 f"- Spectral centroid: {metrics['spectral_centroid_hz']:.2f} Hz",
@@ -139,10 +142,40 @@ def _write_sweep_report(path: Path, name: str, metrics: dict[str, float | bool |
     )
 
 
-def render_default(output_dir: Path) -> None:
+def _signed_draw_pressure(value_pa: float) -> float:
+    return -abs(value_pa) if value_pa > 0.0 else value_pa
+
+
+def _params_with_breath_controls(
+    params: ModelParams,
+    *,
+    duration_s: float,
+    pre_delay_s: float | None,
+    attack_s: float | None,
+    release_s: float | None,
+    pressure_pa: float | None,
+) -> ModelParams:
+    next_params = params
+    if pre_delay_s is not None:
+        next_params = replace(next_params, pre_delay_s=pre_delay_s)
+    if attack_s is not None:
+        next_params = replace(next_params, attack_s=attack_s)
+    if release_s is not None:
+        next_params = replace(next_params, release_s=release_s)
+    if pressure_pa is not None:
+        next_params = replace(next_params, mouth_pressure_pa=_signed_draw_pressure(pressure_pa))
+
+    release_start_s = max(
+        next_params.pre_delay_s + next_params.attack_s,
+        duration_s - next_params.release_s,
+    )
+    return replace(next_params, release_start_s=release_start_s)
+
+
+def render_default(output_dir: Path, params: ModelParams, config: RenderConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    result = render_draw_note(DEFAULT_PARAMS, RenderConfig(duration_s=2.0, sample_rate_hz=44_100))
+    result = render_draw_note(params, config)
 
     wav_path = output_dir / "draw_note.wav"
     csv_path = output_dir / "draw_note_trace.csv"
@@ -161,12 +194,19 @@ def render_default(output_dir: Path) -> None:
     print(f"Wrote {png_path}")
     print(f"Wrote {report_path}")
     print(f"Audio peak={peak:.6f}, rms={rms:.6f}")
+    print(
+        "Breath "
+        f"pre_delay={params.pre_delay_s:.3f}s, "
+        f"attack={params.attack_s:.3f}s, "
+        f"release={params.release_s:.3f}s, "
+        f"pressure={params.mouth_pressure_pa:.1f}Pa"
+    )
 
 
 def render_sweep(output_dir: Path) -> None:
     sweep_dir = output_dir / "sweep"
     sweep_dir.mkdir(parents=True, exist_ok=True)
-    config = RenderConfig(duration_s=2.0, sample_rate_hz=44_100)
+    config = RenderConfig(duration_s=2.5, sample_rate_hz=44_100)
     scored: list[tuple[float, str, dict[str, float | bool | str]]] = []
 
     for index, (name, params) in enumerate(_sweep_candidates(), start=1):
@@ -191,6 +231,7 @@ def render_sweep(output_dir: Path) -> None:
                 f"harmonic={metrics['harmonic_energy_ratio']:.6f}, "
                 f"centroid/f0={metrics['centroid_to_f0']:.2f}, "
                 f"attack={metrics['attack_strength']:.2f}, "
+                f"attack_ratio={metrics['attack_ratio']:.3f}, "
                 f"closed=({metrics['area_b_closed_percent']:.2f}%, "
                 f"{metrics['area_d_closed_percent']:.2f}%), "
                 f"stable={'yes' if metrics['stable_non_clipped'] else 'no'}"
@@ -203,14 +244,33 @@ def render_sweep(output_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the offline harmonica physical model.")
-    parser.add_argument("--sweep", action="store_true", help="render Milestone 3B parameter candidates")
+    parser.add_argument("--sweep", action="store_true", help="render Milestone 3D parameter candidates")
+    parser.add_argument("--attack", type=float, default=None, help="breath attack time in seconds")
+    parser.add_argument("--pre-delay", type=float, default=None, help="quiet delay before breath pressure starts")
+    parser.add_argument("--release", type=float, default=None, help="breath release time in seconds")
+    parser.add_argument(
+        "--pressure",
+        type=float,
+        default=None,
+        help="draw sustain pressure in Pa; positive values are treated as draw suction",
+    )
+    parser.add_argument("--duration", type=float, default=2.5, help="render duration in seconds")
     args = parser.parse_args()
 
     output_dir = PROJECT_ROOT / "outputs"
     if args.sweep:
         render_sweep(output_dir)
     else:
-        render_default(output_dir)
+        params = _params_with_breath_controls(
+            DEFAULT_PARAMS,
+            duration_s=args.duration,
+            pre_delay_s=args.pre_delay,
+            attack_s=args.attack,
+            release_s=args.release,
+            pressure_pa=args.pressure,
+        )
+        config = RenderConfig(duration_s=args.duration, sample_rate_hz=44_100)
+        render_default(output_dir, params, config)
 
 
 if __name__ == "__main__":

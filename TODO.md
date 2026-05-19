@@ -38,28 +38,31 @@
 - [x] Verify audible harmonic content increased in Milestone 3B.
 - [x] Document current acoustic observations, diagnostic metrics, strengths,
       weaknesses, and tuning direction.
-- [ ] Restore a physically plausible breath envelope through `p_breath(t)` as
+- [x] Restore a physically plausible breath envelope through `p_breath(t)` as
       the source for `p_m`.
-- [ ] Add `attack_time`, `release_time`, `sustain_pressure`, and optional
+- [x] Add `attack_time`, `release_time`, `sustain_pressure`, and optional
       `breath_noise_amount` parameters.
-- [ ] Add CLI options `--attack`, `--release`, and `--pressure`.
-- [ ] Plot `p_breath(t)` or `p_m(t)` in diagnostics.
-- [ ] Include attack time, release time, and sustain pressure in the report.
-- [ ] Verify attack is audible, smooth, and not implemented as a post-audio
+- [x] Add CLI options `--attack`, `--release`, and `--pressure`.
+- [x] Add CLI options `--pre-delay` and `--duration`.
+- [x] Plot `p_breath(t)` or `p_m(t)` in diagnostics.
+- [x] Include attack time, release time, and sustain pressure in the report.
+- [x] Verify attack is audible, smooth, and not implemented as a post-audio
       fade.
+- [x] Add attack-ratio test comparing first 100 ms against the sustain region.
 
-## Current Milestone 3B Baseline
+## Current Milestone 3D Baseline
 
 - [x] Stable, non-clipped, non-silent output.
-- [x] Harmonic energy ratio: `0.701431`.
-- [x] Spectral centroid / f0: `1.48`.
+- [x] Harmonic energy ratio: `0.701115`.
+- [x] Spectral centroid / f0: `1.47`.
 - [x] Mostly sinusoidal: `no`.
-- [x] Draw reed opening near closed: `47.30%`.
+- [x] Draw reed opening near closed: `48.58%`.
 - [x] Chamber pressure feedback nonzero: `yes`.
 - [x] Reed participation: `both reeds participate`.
+- [x] Attack ratio first 100 ms / sustain: `0.013433`.
 - [ ] Improve spectral centroid toward `2x f0` only if stability and physical
       coupling are preserved.
-- [ ] Restore the weakened natural breath/fade-in envelope by shaping mouth
+- [x] Restore the weakened natural breath/fade-in envelope by shaping mouth
       pressure physically.
 
 ## Milestone 4: Blow And Draw Presets

@@ -36,9 +36,11 @@ class ModelParams:
     vocal_tract_q: float
     vocal_tract_impedance_pa_s_m3: float
     mouth_pressure_pa: float
+    pre_delay_s: float
     attack_s: float
     release_s: float
     release_start_s: float
+    breath_noise_amount: float
     acoustic_flow_gain_pa_s_m3: float
     pressure_output_gain: float
     chamber_pressure_output_gain: float
@@ -52,7 +54,7 @@ class ModelParams:
 
 @dataclass(frozen=True)
 class RenderConfig:
-    duration_s: float = 2.0
+    duration_s: float = 2.5
     sample_rate_hz: int = 44_100
     integration_rate_hz: int = 12_000
     max_step_s: float = 1.0 / 6_000.0
@@ -132,9 +134,11 @@ DEFAULT_PARAMS = ModelParams(
     vocal_tract_q=5.0,
     vocal_tract_impedance_pa_s_m3=2.2e8,
     mouth_pressure_pa=-900.0,
-    attack_s=0.04,
-    release_s=0.12,
-    release_start_s=2.10,
+    pre_delay_s=0.05,
+    attack_s=0.35,
+    release_s=0.20,
+    release_start_s=2.30,
+    breath_noise_amount=0.0,
     acoustic_flow_gain_pa_s_m3=0.0,
     pressure_output_gain=0.01,
     chamber_pressure_output_gain=0.0,

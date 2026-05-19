@@ -5,9 +5,10 @@ Milestone 2 implemented the full coupled proposal model. Milestone 3B increased
 harmonic content and reed character through stronger reed-slot nonlinearity,
 documented closure damping, and a pressure/flow output derived from simulated
 states. The sound now begins to resemble a harmonica, but the natural
-breath/fade-in envelope became weaker after stronger nonlinear tuning. The next
-step is to restore attack behavior through a physically meaningful
-mouth-pressure envelope rather than a post-audio fade.
+breath/fade-in envelope became weaker after stronger nonlinear tuning.
+Milestone 3D restores the audible Einschwingen by applying a physically
+meaningful mouth-pressure envelope before the reed force and Bernoulli flow
+equations are evaluated, rather than fading the rendered WAV afterward.
 
 Milestone 2 implements the full proposal state vector
 `[x_b, v_b, x_d, v_d, p_c, p_t, v_t]` in one coupled ODE system solved with
@@ -56,12 +57,20 @@ Approximations:
   component. Sweep mode also renders flow-only and parameter variants. These
   are documented output choices from `p_t`, `Q_d`, and related simulated
   pressure/flow states, not oscillator layering or fake subtractive synthesis.
-- The draw note uses one smooth negative mouth-pressure envelope with a short
-  attack ramp. Milestone 3B raises the pressure and shortens the attack to make
-  the coupled reed-slot system speak more strongly; the pressure is still only
-  the physical drive term used by the ODE. The default release starts just after
-  the 2-second render window because this milestone prioritizes a stable
-  sustained coupled tone over modeling reed shutdown.
+- The draw note uses a signed mouth-pressure source
+  `p_m_source(t) = mouth_pressure_pa * envelope(t)`. For the default draw note,
+  `mouth_pressure_pa` is negative. The envelope is zero during `pre_delay_s`,
+  rises with a raised-cosine attack over `attack_s`, holds during sustain, and
+  releases with a raised-cosine release over `release_s`. This pressure is used
+  inside the ODE before computing `F_b`, `DeltaP_b`, and `Q_b`; it is not a
+  post-render audio fade.
+- The default Milestone 3D breath controls are `pre_delay_s = 0.05`,
+  `attack_s = 0.35`, `release_s = 0.20`, `release_start_s = 2.30`,
+  `mouth_pressure_pa = -900`, and `breath_noise_amount = 0`.
+- Audio normalization is global peak scaling only. The renderer no longer
+  subtracts a global DC mean before scaling, because doing so can add an
+  artificial offset to the initial quiet breath-delay region. No RMS or
+  per-window gain normalization is used.
 - The reduced vocal tract is tuned near the draw reed frequency region with
   moderate Q and impedance. It remains driven by `Q_b - Q_d`; it is not an
   independent sound source.
@@ -84,26 +93,31 @@ controllable pressure attack rather than more output processing.
 
 ## Current Diagnostic Metrics
 
-Latest default metrics from `outputs/draw_note_report.md`:
+Latest default metrics from `outputs/draw_note_report.md` after Milestone 3D:
 
 - peak audio: `0.850000`
-- RMS audio: `0.406446`
+- RMS audio: `0.373684`
+- RMS first 100 ms: `0.005430`
+- RMS sustain region 0.7-1.2 s: `0.404238`
+- attack ratio first/sustain: `0.013433`
 - estimated fundamental: `444.00 Hz`
-- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701431`
-- spectral centroid: `656.91 Hz`
-- spectral centroid / f0: `1.48`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701115`
+- spectral centroid: `652.27 Hz`
+- spectral centroid / f0: `1.47`
 - mostly sinusoidal: `no`
-- attack strength: `5432.41`
-- RMS `x_b`: `2.028569135e-05 m`
-- RMS `x_d`: `3.108101046e-05 m`
-- RMS `p_c`: `2.110078032e+02 Pa`
-- RMS `p_t`: `5.268223672e+02 Pa`
-- RMS `Q_b`: `1.228234951e-06 m^3/s`
-- RMS `Q_d`: `1.870442404e-06 m^3/s`
+- attack strength: `1.19`
+- RMS `x_b`: `1.874150840e-05 m`
+- RMS `x_d`: `2.917331347e-05 m`
+- RMS `p_c`: `1.984474327e+02 Pa`
+- RMS `p_t`: `4.928161716e+02 Pa`
+- RMS `Q_b`: `1.147609846e-06 m^3/s`
+- RMS `Q_d`: `1.748453097e-06 m^3/s`
 - blow reed opening near closed: `0.00%`
-- draw reed opening near closed: `47.30%`
+- draw reed opening near closed: `48.58%`
 - chamber pressure feedback nonzero: `yes`
 - reed participation: `both reeds participate`
+- mouth pressure min/max: `-900.000 / -0.000 Pa`
+- breath envelope min/max: `0.000 / 1.000`
 
 Interpretation:
 
@@ -111,10 +125,13 @@ Interpretation:
   the output is no longer dominated by only the fundamental.
 - `Mostly sinusoidal: no` confirms that the render moved beyond the stable but
   sine-like Milestone 1 result.
-- Spectral centroid / f0 `1.48` shows added brightness, but it remains below
+- Spectral centroid / f0 `1.47` shows added brightness, but it remains below
   the optional `2x f0` target.
-- Draw reed near closure at `47.30%` shows that the reed-slot nonlinearity is
+- Draw reed near closure at `48.58%` shows that the reed-slot nonlinearity is
   physically active for a meaningful part of the note.
+- Attack ratio `0.013433` is below the Milestone 3D target of `0.35`, so the
+  first 100 ms is much quieter than the sustain region and the pressure buildup
+  is audible and visible in diagnostics.
 - Nonzero `p_c`, `p_t`, `Q_b`, and `Q_d` RMS values show that the chamber,
   vocal tract, and flows are participating in the coupled model.
 
@@ -131,19 +148,18 @@ Strengths:
 
 Weaknesses:
 
-- breath attack is not yet as natural or controllable as desired
 - current brightness remains below the aspirational `2x f0` centroid target
 - blow reed near-closure is not active in the current draw-note preset
-- the current default pressure drive favors reliable excitation over expressive
-  breath shaping
+- breath attack is now controllable, but still needs listening-based tuning for
+  the most natural harmonica onset
 
 ## Tuning Direction
 
-The next tuning direction is Milestone 3C: restore a physically plausible breath
-envelope by driving the existing model with a time-varying mouth pressure source
-`p_breath(t)`. This should expose `attack_time`, `release_time`,
-`sustain_pressure`, and optional `breath_noise_amount` parameters while keeping
-the reed, chamber, Bernoulli flow, and vocal-tract equations unchanged.
+Milestone 3D restores a physically plausible breath envelope by driving the
+existing model with a time-varying mouth pressure source `p_breath(t)`. It
+exposes `attack_time`, `release_time`, `sustain_pressure`, and optional
+`breath_noise_amount` controls while keeping the reed, chamber, Bernoulli flow,
+and vocal-tract equations unchanged.
 
 The rationale is physical: in a real harmonica note, the player does not apply
 full pressure instantaneously. A smooth pressure buildup changes the pressure
@@ -151,3 +167,7 @@ drops that drive reed force and airflow, so the attack emerges from the ODE
 states. A post-audio fade would only hide the rendered onset after the model has
 already run; it would not change reed excitation, chamber pressure feedback, or
 flow nonlinearity.
+
+Next tuning should preserve the Milestone 3D attack ratio target while nudging
+brightness and blow/draw balance through physical reed-slot, chamber, and
+vocal-tract parameters.

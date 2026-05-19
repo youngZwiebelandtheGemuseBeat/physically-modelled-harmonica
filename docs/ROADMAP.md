@@ -26,7 +26,7 @@ chamber-pressure feedback.
 
 ## Milestone 3: Self-Exciting Harmonica-Like Model
 
-Status: In progress. Milestone 3B is the current baseline.
+Status: In progress. Milestone 3D is the current baseline.
 
 Make the model self-exciting and harmonica-like.
 
@@ -106,7 +106,7 @@ Current weaknesses:
 
 ### Milestone 3C: Physical Breath Envelope
 
-Status: Next.
+Status: Done.
 
 Restore attack behavior by introducing a physically meaningful breath pressure
 envelope `p_breath(t)` as the source for mouth pressure `p_m`. The envelope
@@ -118,6 +118,31 @@ excitation physically.
 The intended tuning direction is to recover a smooth, audible breath attack
 while preserving the Milestone 3B reed/chamber/vocal-tract coupling and harmonic
 content.
+
+### Milestone 3D: Audible Einschwingen
+
+Status: Done.
+
+Milestone 3D makes the physical breath attack audible and visible. The default
+draw note now uses a `0.05 s` pre-delay, `0.35 s` raised-cosine attack,
+`0.20 s` release, `2.5 s` duration, and `-900 Pa` signed sustain pressure. The
+pressure envelope is applied to `p_m_source(t)` before the physical equations,
+not as a post-render fade.
+
+Current default diagnostic metrics from `outputs/draw_note_report.md`:
+
+- RMS first 100 ms: `0.005430`
+- RMS sustain region 0.7-1.2 s: `0.404238`
+- attack ratio first/sustain: `0.013433`
+- harmonic energy ratio: `0.701115`
+- spectral centroid / f0: `1.47`
+- mostly sinusoidal: `no`
+- draw reed opening near closed: `48.58%`
+- chamber pressure feedback nonzero: `yes`
+
+Interpretation: the attack-ratio target `< 0.35` is met, the diagnostics show
+the mouth-pressure envelope rising gradually, and the Milestone 3B harmonic
+character is preserved.
 
 ## Milestone 4: Blow And Draw Presets
 

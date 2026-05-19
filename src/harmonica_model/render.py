@@ -24,9 +24,11 @@ from .params import DEFAULT_PARAMS, ModelParams, RenderConfig
 class RenderResult:
     sample_rate_hz: int
     time_s: np.ndarray
+    params: ModelParams
     state: np.ndarray
     audio: np.ndarray
     p_m: np.ndarray
+    breath_envelope: np.ndarray
     delta_p_b: np.ndarray
     delta_p_d: np.ndarray
     area_b: np.ndarray
@@ -66,16 +68,12 @@ class RenderResult:
         return self.state[V_T]
 
 
-def _dc_block(signal: np.ndarray) -> np.ndarray:
-    return signal - float(np.mean(signal))
-
-
 def _normalize_audio(signal: np.ndarray, peak: float = 0.85) -> np.ndarray:
-    centered = _dc_block(np.asarray(signal, dtype=float))
-    max_abs = float(np.max(np.abs(centered)))
+    values = np.asarray(signal, dtype=float)
+    max_abs = float(np.max(np.abs(values)))
     if max_abs <= 0.0:
-        return centered
-    return centered * (peak / max_abs)
+        return values
+    return values * (peak / max_abs)
 
 
 def render_draw_note(
@@ -113,9 +111,11 @@ def render_draw_note(
     return RenderResult(
         sample_rate_hz=config.sample_rate_hz,
         time_s=time_s,
+        params=params,
         state=state,
         audio=_normalize_audio(raw_audio),
         p_m=np.array([value.p_m for value in derived], dtype=float),
+        breath_envelope=np.array([value.breath_envelope for value in derived], dtype=float),
         delta_p_b=np.array([value.delta_p_b for value in derived], dtype=float),
         delta_p_d=np.array([value.delta_p_d for value in derived], dtype=float),
         area_b=np.array([value.area_b for value in derived], dtype=float),

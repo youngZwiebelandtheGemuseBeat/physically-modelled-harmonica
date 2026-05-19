@@ -77,3 +77,47 @@ drive. A smooth attack and release should alter reed excitation, pressure
 drops, chamber feedback, and airflow inside the ODE. Fading the WAV afterward
 would only change the final signal amplitude and would not affect the model
 states that create the harmonica-like onset.
+
+## Milestone 3D Breath Attack
+
+Milestone 3D implements the breath envelope as an audible and visible physical
+drive. The default render now uses `pre_delay = 0.05 s`, `attack_time = 0.35 s`,
+`release_time = 0.20 s`, `duration = 2.5 s`, and `sustain_pressure = -900 Pa`.
+The envelope is a raised-cosine pressure buildup applied to `p_m_source(t)`
+before the reed-force and Bernoulli-flow equations run.
+
+This keeps the physical model intact: the attack changes reed excitation,
+pressure drops, airflow, chamber feedback, and vocal-tract response. It is not
+implemented as a post-render audio fade. Audio normalization is global peak
+scaling only, so the first part of the note remains quieter than the sustain
+region.
+
+Latest default metrics from `outputs/draw_note_report.md`:
+
+- peak audio: `0.850000`
+- RMS audio: `0.373684`
+- RMS first 100 ms: `0.005430`
+- RMS sustain region 0.7-1.2 s: `0.404238`
+- attack ratio first/sustain: `0.013433`
+- estimated fundamental: `444.00 Hz`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701115`
+- spectral centroid: `652.27 Hz`
+- spectral centroid / f0: `1.47`
+- mostly sinusoidal: `no`
+- draw reed opening near closed: `48.58%`
+- chamber pressure feedback nonzero: `yes`
+- reed participation: `both reeds participate`
+
+Interpretation:
+
+- The Milestone 3D attack target is met because `0.013433 < 0.35`.
+- The harmonic ratio remains essentially at the Milestone 3B level, so the more
+  gradual breath attack did not erase the reed character.
+- The diagnostics now show both `p_m_source(t)` and `envelope(t)`, making the
+  Einschwingen visible as a pressure-drive event rather than an audio edit.
+
+Current remaining tuning direction:
+
+- preserve the breath attack ratio while listening for a natural onset
+- improve brightness only through physical coupling and reed-slot parameters
+- keep the full coupled proposal model as the source of the sound

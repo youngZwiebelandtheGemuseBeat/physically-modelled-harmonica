@@ -11,7 +11,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from harmonica_model.diagnostics import write_diagnostic_report
+from harmonica_model.diagnostics import diagnostic_metrics, write_diagnostic_report
 from harmonica_model.params import DEFAULT_PARAMS, RenderConfig
 from harmonica_model.render import render_draw_note
 
@@ -44,6 +44,7 @@ def test_render_exposes_full_coupled_state_and_feedback() -> None:
         result.q_d,
         result.area_b,
         result.area_d,
+        result.breath_envelope,
         result.delta_p_b,
         result.delta_p_d,
     ):
@@ -57,6 +58,21 @@ def test_render_exposes_full_coupled_state_and_feedback() -> None:
     assert float(np.max(np.abs(result.q_d))) > 1.0e-9
     assert float(np.max(np.abs(result.delta_p_b))) > 1.0
     assert float(np.max(np.abs(result.delta_p_d))) > 1.0
+    assert result.p_m[0] == 0.0
+    assert result.breath_envelope[0] == 0.0
+
+
+def test_physical_breath_attack_is_audible_in_render_metrics() -> None:
+    result = render_draw_note(
+        DEFAULT_PARAMS,
+        RenderConfig(duration_s=1.25, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0),
+    )
+    metrics = diagnostic_metrics(result)
+
+    assert metrics["rms_first_100ms"] < metrics["rms_sustain"]
+    assert metrics["attack_ratio"] < 0.35
+    assert float(result.breath_envelope[0]) == 0.0
+    assert float(result.breath_envelope[int(0.70 * result.sample_rate_hz)]) > 0.99
 
 
 def test_diagnostic_report_contains_audit_metrics(tmp_path: Path) -> None:
@@ -72,5 +88,7 @@ def test_diagnostic_report_contains_audit_metrics(tmp_path: Path) -> None:
     assert "Peak audio" in report
     assert "Estimated fundamental frequency" in report
     assert "Harmonic energy ratio" in report
+    assert "Attack ratio first/sustain" in report
+    assert "Breath Envelope Parameters" in report
     assert "Chamber pressure feedback nonzero" in report
     assert "Equation Audit" in report

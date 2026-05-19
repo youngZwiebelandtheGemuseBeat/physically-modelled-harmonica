@@ -21,7 +21,16 @@ from .render import RenderResult
 
 def _rms(signal: np.ndarray) -> float:
     values = np.asarray(signal, dtype=float)
+    if values.size == 0:
+        return 0.0
     return float(np.sqrt(np.mean(values * values)))
+
+
+def _time_window_rms(result: RenderResult, start_s: float, end_s: float) -> float:
+    mask = (result.time_s >= start_s) & (result.time_s < end_s)
+    if not np.any(mask):
+        return 0.0
+    return _rms(result.audio[mask])
 
 
 def _spectrum(signal: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -114,6 +123,11 @@ def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
     spectral = _estimate_spectral_metrics(result)
     audio_peak = float(np.max(np.abs(result.audio)))
     audio_rms = _rms(result.audio)
+    rms_first_100ms = _time_window_rms(result, 0.0, 0.10)
+    rms_sustain = _time_window_rms(result, 0.70, 1.20)
+    if rms_sustain <= 0.0:
+        rms_sustain = _time_window_rms(result, result.time_s[-1] * 0.5, result.time_s[-1])
+    attack_ratio = float(rms_first_100ms / rms_sustain) if rms_sustain > 0.0 else 0.0
     x_b_rms = _rms(result.x_b)
     x_d_rms = _rms(result.x_d)
     p_c_rms = _rms(result.p_c)
@@ -153,6 +167,10 @@ def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
         **spectral,
         "audio_peak": audio_peak,
         "audio_rms": audio_rms,
+        "rms_first_100ms": rms_first_100ms,
+        "rms_sustain": rms_sustain,
+        "attack_ratio": attack_ratio,
+        "attack_ratio_target_met": attack_ratio < 0.35,
         "x_b_rms": x_b_rms,
         "x_d_rms": x_d_rms,
         "p_c_rms": p_c_rms,
@@ -185,6 +203,7 @@ def write_trace_csv(path: str | Path, result: RenderResult) -> None:
             [
                 "time_s",
                 "audio",
+                "breath_envelope",
                 "p_m_pa",
                 "p_c_pa",
                 "p_t_pa",
@@ -208,6 +227,7 @@ def write_trace_csv(path: str | Path, result: RenderResult) -> None:
                 [
                     f"{t_s:.9f}",
                     f"{result.audio[i]:.9e}",
+                    f"{result.breath_envelope[i]:.9e}",
                     f"{result.p_m[i]:.9e}",
                     f"{result.p_c[i]:.9e}",
                     f"{result.p_t[i]:.9e}",
@@ -234,7 +254,7 @@ def write_diagnostics_plot(path: str | Path, result: RenderResult) -> None:
 
     freqs_hz, _, magnitude_db = _spectrum(result.audio, result.sample_rate_hz)
 
-    fig, axes = plt.subplots(4, 2, figsize=(14, 11))
+    fig, axes = plt.subplots(5, 2, figsize=(14, 13))
     fig.suptitle("Draw Note Physical Model Diagnostics")
 
     axes[0, 0].plot(result.time_s, result.audio, color="black", linewidth=0.7)
@@ -247,44 +267,54 @@ def write_diagnostics_plot(path: str | Path, result: RenderResult) -> None:
     axes[0, 1].set_xlabel("frequency Hz")
     axes[0, 1].set_ylabel("magnitude dB")
 
-    axes[1, 0].plot(result.time_s, result.p_c, label="p_c", linewidth=0.8)
-    axes[1, 0].plot(result.time_s, result.p_t, label="p_t", linewidth=0.8)
-    axes[1, 0].set_title("Chamber and tract pressure")
+    axes[1, 0].plot(result.time_s, result.p_m, label="p_m source", linewidth=0.9)
+    axes[1, 0].set_title("Mouth pressure source")
     axes[1, 0].set_ylabel("Pa")
     axes[1, 0].legend(loc="upper right")
 
-    axes[1, 1].plot(result.time_s, result.delta_p_b, label="DeltaP_b", linewidth=0.8)
-    axes[1, 1].plot(result.time_s, result.delta_p_d, label="DeltaP_d", linewidth=0.8)
-    axes[1, 1].set_title("Reed pressure drops")
-    axes[1, 1].set_ylabel("Pa")
+    axes[1, 1].plot(result.time_s, result.breath_envelope, label="envelope", linewidth=0.9)
+    axes[1, 1].set_title("Breath envelope")
+    axes[1, 1].set_ylabel("0..1")
     axes[1, 1].legend(loc="upper right")
 
-    axes[2, 0].plot(result.time_s, result.x_b * 1.0e6, label="x_b", linewidth=0.8)
-    axes[2, 0].plot(result.time_s, result.x_d * 1.0e6, label="x_d", linewidth=0.8)
-    axes[2, 0].set_title("Reed displacements")
-    axes[2, 0].set_ylabel("um")
+    axes[2, 0].plot(result.time_s, result.p_c, label="p_c", linewidth=0.8)
+    axes[2, 0].plot(result.time_s, result.p_t, label="p_t", linewidth=0.8)
+    axes[2, 0].set_title("Chamber and tract pressure")
+    axes[2, 0].set_ylabel("Pa")
     axes[2, 0].legend(loc="upper right")
 
-    axes[2, 1].plot(result.time_s, result.area_b * 1.0e9, label="A_b", linewidth=0.8)
-    axes[2, 1].plot(result.time_s, result.area_d * 1.0e9, label="A_d", linewidth=0.8)
-    axes[2, 1].set_title("Reed opening areas")
-    axes[2, 1].set_ylabel("mm^2")
+    axes[2, 1].plot(result.time_s, result.delta_p_b, label="DeltaP_b", linewidth=0.8)
+    axes[2, 1].plot(result.time_s, result.delta_p_d, label="DeltaP_d", linewidth=0.8)
+    axes[2, 1].set_title("Reed pressure drops")
+    axes[2, 1].set_ylabel("Pa")
     axes[2, 1].legend(loc="upper right")
 
-    axes[3, 0].plot(result.time_s, result.q_b * 1.0e6, label="Q_b", linewidth=0.8)
-    axes[3, 0].plot(result.time_s, result.q_d * 1.0e6, label="Q_d", linewidth=0.8)
-    axes[3, 0].set_title("Bernoulli flows")
-    axes[3, 0].set_ylabel("ml/s")
-    axes[3, 0].set_xlabel("time s")
+    axes[3, 0].plot(result.time_s, result.x_b * 1.0e6, label="x_b", linewidth=0.8)
+    axes[3, 0].plot(result.time_s, result.x_d * 1.0e6, label="x_d", linewidth=0.8)
+    axes[3, 0].set_title("Reed displacements")
+    axes[3, 0].set_ylabel("um")
     axes[3, 0].legend(loc="upper right")
 
-    net_flow = result.q_b - result.q_d
-    axes[3, 1].plot(result.time_s, net_flow * 1.0e6, label="Q_b - Q_d", linewidth=0.8)
-    axes[3, 1].plot(result.time_s, result.dp_c / 1.0e6, label="p_c' / 1e6", linewidth=0.8)
-    axes[3, 1].set_title("Chamber feedback drive")
-    axes[3, 1].set_ylabel("flow ml/s, pressure slope")
-    axes[3, 1].set_xlabel("time s")
+    axes[3, 1].plot(result.time_s, result.area_b * 1.0e9, label="A_b", linewidth=0.8)
+    axes[3, 1].plot(result.time_s, result.area_d * 1.0e9, label="A_d", linewidth=0.8)
+    axes[3, 1].set_title("Reed opening areas")
+    axes[3, 1].set_ylabel("mm^2")
     axes[3, 1].legend(loc="upper right")
+
+    axes[4, 0].plot(result.time_s, result.q_b * 1.0e6, label="Q_b", linewidth=0.8)
+    axes[4, 0].plot(result.time_s, result.q_d * 1.0e6, label="Q_d", linewidth=0.8)
+    axes[4, 0].set_title("Bernoulli flows")
+    axes[4, 0].set_ylabel("ml/s")
+    axes[4, 0].set_xlabel("time s")
+    axes[4, 0].legend(loc="upper right")
+
+    net_flow = result.q_b - result.q_d
+    axes[4, 1].plot(result.time_s, net_flow * 1.0e6, label="Q_b - Q_d", linewidth=0.8)
+    axes[4, 1].plot(result.time_s, result.dp_c / 1.0e6, label="p_c' / 1e6", linewidth=0.8)
+    axes[4, 1].set_title("Chamber feedback drive")
+    axes[4, 1].set_ylabel("flow ml/s, pressure slope")
+    axes[4, 1].set_xlabel("time s")
+    axes[4, 1].legend(loc="upper right")
 
     for axis in axes.flat:
         axis.grid(True, alpha=0.25)
@@ -307,6 +337,9 @@ def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
         "",
         f"- Peak audio: {metrics['audio_peak']:.6f}",
         f"- RMS audio: {metrics['audio_rms']:.6f}",
+        f"- RMS first 100 ms: {metrics['rms_first_100ms']:.6f}",
+        f"- RMS sustain region 0.7-1.2 s: {metrics['rms_sustain']:.6f}",
+        f"- Attack ratio first/sustain: {metrics['attack_ratio']:.6f}",
         f"- Estimated fundamental frequency: {metrics['fundamental_hz']:.2f} Hz",
         f"- Harmonic energy ratio, harmonics 2-8 vs fundamental: {metrics['harmonic_energy_ratio']:.6f}",
         f"- Spectral centroid: {metrics['spectral_centroid_hz']:.2f} Hz",
@@ -326,6 +359,25 @@ def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
         f"- Draw reed opening near closed: {metrics['area_d_closed_percent']:.2f}%",
         f"- Chamber pressure feedback nonzero: {'yes' if metrics['chamber_feedback_nonzero'] else 'no'}",
         f"- Reed participation: {metrics['reed_participation']}",
+        f"- Mouth pressure min/max: {float(np.min(result.p_m)):.3f} / {float(np.max(result.p_m)):.3f} Pa",
+        f"- Breath envelope min/max: {float(np.min(result.breath_envelope)):.3f} / {float(np.max(result.breath_envelope)):.3f}",
+        "",
+        "## Breath Envelope Parameters",
+        "",
+        f"- pre_delay: {result.params.pre_delay_s:.3f} s",
+        f"- attack_time: {result.params.attack_s:.3f} s",
+        f"- release_time: {result.params.release_s:.3f} s",
+        f"- release_start: {result.params.release_start_s:.3f} s",
+        f"- sustain_pressure: {result.params.mouth_pressure_pa:.3f} Pa",
+        f"- breath_noise_amount: {result.params.breath_noise_amount:.3f}",
+        "",
+        "## Milestone 3D Targets",
+        "",
+        "- Target attack ratio first 100 ms / sustain: < 0.35.",
+        "- Target diagnostics: p_m source and envelope rise gradually.",
+        "- Target output: stable and non-silent with Milestone 3B harmonic character.",
+        "",
+        f"- Attack-ratio target met: {'yes' if metrics['attack_ratio_target_met'] else 'no'}",
         "",
         "## Milestone 3B Targets",
         "",
@@ -355,7 +407,10 @@ def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
         (
             "The current render is stable and physically coupled. Milestone 3B strengthens "
             "harmonic content by tightening reed-slot modulation, adding documented closure "
-            "damping, and using a pressure/flow radiation approximation from simulated states."
+            "damping, and using a pressure/flow radiation approximation from simulated states. "
+            "Milestone 3D restores audible Einschwingen by applying the raised-cosine breath "
+            "envelope to the mouth-pressure source before the reed force and Bernoulli flow "
+            "equations are evaluated."
         ),
         "",
     ]
