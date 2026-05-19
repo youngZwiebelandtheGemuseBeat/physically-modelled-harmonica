@@ -92,7 +92,35 @@
 - [ ] Continue tuning draw/blow brightness and tone quality through physical
       parameters only.
 
-## Milestone 5: Vocal-Tract Sweep / Bend Demonstration
+## Milestone 5: Reference-Based Calibration And Radiation Layer
+
+- [x] Add optional reference WAV analysis.
+- [x] Compute fundamental estimate.
+- [x] Compute harmonic amplitudes 1-12.
+- [x] Compute harmonic energy ratio.
+- [x] Compute spectral centroid and rolloff.
+- [x] Compute attack time, RMS envelope, and spectral envelope.
+- [x] Add synthetic-vs-reference comparison report.
+- [x] Add synthetic-vs-reference comparison plot.
+- [x] Add high-pass / differentiating radiation tendency for simulated flow
+      output.
+- [x] Add optional low-Q body/chamber coloration.
+- [x] Add optional low-level flow-driven turbulence noise.
+- [x] Keep flow noise driven by `abs(Q_b)`, `abs(Q_d)`, and pressure drops.
+- [x] Add `python run.py --calibrate`.
+- [x] Search reed Q/damping.
+- [x] Search rest openings and opening scaling.
+- [x] Search discharge coefficients.
+- [x] Search chamber volume and leakage-radiation conductance.
+- [x] Search tract resonance frequency, Q, and coupling.
+- [x] Search output choice, radiation settings, and flow-noise amount.
+- [x] Rank candidates by harmonic content, centroid, waveform shape, attack
+      stability, and reference similarity when provided.
+- [x] Write top candidate WAVs under `outputs/calibration/`.
+- [x] Keep the core ODE proposal equations intact.
+- [x] Document radiation and noise approximations physically.
+
+## Milestone 5B: Vocal-Tract Sweep / Bend Demonstration
 
 - [ ] Add tract parameter sweep.
 - [ ] Change pitch/timbre through vocal-tract resonance/loading parameters.

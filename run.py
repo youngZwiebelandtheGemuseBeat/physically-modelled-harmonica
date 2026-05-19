@@ -13,6 +13,14 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from harmonica_model.audio import write_wav
+from harmonica_model.analysis import (
+    analyze_audio,
+    analyze_wav,
+    comparison_score,
+    write_analysis_plot,
+    write_analysis_report,
+    write_reference_comparison,
+)
 from harmonica_model.diagnostics import (
     diagnostic_metrics,
     write_comparison_diagnostics_plot,
@@ -50,6 +58,28 @@ def _draw_reed_variant(
         closure_damping_kg_s=closure_damping_kg_s,
     )
     return replace(params, draw_reed=draw_reed)
+
+
+def _reed_opening_variant(
+    reed: ReedParams,
+    *,
+    rest_opening_m: float | None = None,
+    displacement_to_gap: float | None = None,
+    quality_factor: float | None = None,
+    discharge_coefficient: float | None = None,
+) -> ReedParams:
+    next_reed = _reed_with_q(reed, quality_factor) if quality_factor is not None else reed
+    next_rest = next_reed.rest_opening_m if rest_opening_m is None else rest_opening_m
+    next_scale = next_reed.displacement_to_gap if displacement_to_gap is None else displacement_to_gap
+    next_reed = replace(
+        next_reed,
+        rest_opening_m=next_rest,
+        displacement_to_gap=next_scale,
+        closing_displacement_m=(-next_rest / next_scale if next_scale != 0.0 else next_reed.closing_displacement_m),
+    )
+    if discharge_coefficient is not None:
+        next_reed = replace(next_reed, discharge_coefficient=discharge_coefficient)
+    return next_reed
 
 
 def _sweep_candidates() -> list[tuple[str, ModelParams]]:
@@ -111,6 +141,131 @@ def _candidate_score(metrics: dict[str, float | bool | str]) -> float:
         + 8.0 * closure_score
         + 0.02 * min(float(metrics["attack_strength"]), 500.0)
     )
+
+
+def _calibration_score(
+    metrics: dict[str, float | bool | str],
+    analysis,
+    reference_analysis=None,
+) -> float:
+    if not metrics["stable_non_clipped"]:
+        return -1.0e6
+    centroid_ratio = float(metrics["centroid_to_f0"])
+    harmonic_ratio = float(analysis.harmonic_energy_ratio)
+    non_sinusoidal = 1.0 if not bool(metrics["mostly_sinusoidal"]) else -1.0
+    attack_ratio = float(metrics["attack_ratio"])
+    attack_score = 1.0 - min(abs(attack_ratio - 0.05) / 0.30, 1.5)
+    waveform_score = min(float(metrics["audio_rms"]) / 0.20, 2.0)
+    score = (
+        80.0 * min(harmonic_ratio, 2.0)
+        + 12.0 * min(centroid_ratio, 3.5)
+        + 12.0 * non_sinusoidal
+        + 10.0 * attack_score
+        + 5.0 * waveform_score
+    )
+    if reference_analysis is not None:
+        score += 80.0 * comparison_score(analysis, reference_analysis)
+    return float(score)
+
+
+def _calibration_candidates(mode: str) -> list[tuple[str, ModelParams]]:
+    base = _preset_for_mode(mode)
+
+    if mode == "draw":
+        active_reed_name = "draw_reed"
+        passive_reed_name = "blow_reed"
+        active_scale = -3.2
+    else:
+        active_reed_name = "blow_reed"
+        passive_reed_name = "draw_reed"
+        active_scale = 3.2
+
+    def with_reeds(
+        params: ModelParams,
+        *,
+        active_q: float | None = None,
+        passive_q: float | None = None,
+        active_rest: float | None = None,
+        active_gap_scale: float | None = None,
+        active_discharge: float | None = None,
+        passive_discharge: float | None = None,
+    ) -> ModelParams:
+        active = _reed_opening_variant(
+            getattr(params, active_reed_name),
+            rest_opening_m=active_rest,
+            displacement_to_gap=active_gap_scale,
+            quality_factor=active_q,
+            discharge_coefficient=active_discharge,
+        )
+        passive = _reed_opening_variant(
+            getattr(params, passive_reed_name),
+            quality_factor=passive_q,
+            discharge_coefficient=passive_discharge,
+        )
+        return replace(params, **{active_reed_name: active, passive_reed_name: passive})
+
+    return [
+        ("baseline_radiated_mix", base),
+        (
+            "brighter_flow_radiation",
+            replace(
+                base,
+                radiation_highpass_hz=150.0,
+                radiation_differentiation_mix=0.36,
+                body_resonance_frequency_hz=2100.0,
+                body_resonance_q=1.8,
+                body_resonance_gain=0.18,
+            ),
+        ),
+        (
+            "net_flow_radiator",
+            replace(
+                base,
+                output_source="net_flow",
+                acoustic_flow_gain_pa_s_m3=1.4e8,
+                radiation_highpass_hz=120.0,
+                radiation_differentiation_mix=0.45,
+                body_resonance_frequency_hz=1900.0,
+                body_resonance_gain=0.16,
+            ),
+        ),
+        (
+            "active_reed_higher_q",
+            with_reeds(base, active_q=50.0, passive_q=16.0),
+        ),
+        (
+            "tighter_active_opening",
+            with_reeds(base, active_rest=1.5e-6, active_gap_scale=active_scale * 1.10),
+        ),
+        (
+            "looser_active_opening",
+            with_reeds(base, active_rest=3.2e-6, active_gap_scale=active_scale * 0.85),
+        ),
+        (
+            "higher_discharge",
+            with_reeds(base, active_discharge=0.76, passive_discharge=0.68),
+        ),
+        (
+            "smaller_chamber_stronger_feedback",
+            replace(base, chamber_volume_m3=6.5e-7, vocal_tract_impedance_pa_s_m3=2.6e8),
+        ),
+        (
+            "larger_chamber_small_leak_radiation",
+            replace(base, chamber_volume_m3=1.1e-6, chamber_leakage_conductance_m3_s_pa=1.5e-10),
+        ),
+        (
+            "tract_near_second_harmonic",
+            replace(base, vocal_tract_frequency_hz=780.0, vocal_tract_q=4.5, vocal_tract_impedance_pa_s_m3=2.4e8),
+        ),
+        (
+            "low_q_body_coloration",
+            replace(base, body_resonance_frequency_hz=1450.0, body_resonance_q=1.1, body_resonance_gain=0.22),
+        ),
+        (
+            "low_flow_noise",
+            replace(base, flow_noise_amount=0.018, radiation_differentiation_mix=0.25),
+        ),
+    ]
 
 
 def _write_sweep_report(path: Path, name: str, metrics: dict[str, float | bool | str], score: float) -> None:
@@ -275,6 +430,117 @@ def render_sweep(output_dir: Path) -> None:
     print(f"Wrote {summary_path}")
 
 
+def analyze_reference(output_dir: Path, reference_path: Path) -> None:
+    analysis = analyze_wav(reference_path)
+    report_path = output_dir / "reference_analysis.md"
+    plot_path = output_dir / "reference_analysis.png"
+    write_analysis_report(report_path, "Reference Analysis", analysis)
+    write_analysis_plot(plot_path, "Reference Analysis", analysis)
+    print(f"Wrote {report_path}")
+    print(f"Wrote {plot_path}")
+
+
+def compare_render_to_reference(output_dir: Path, result: RenderResult, reference_path: Path) -> None:
+    synthetic = analyze_audio(result.audio, result.sample_rate_hz)
+    reference = analyze_wav(reference_path)
+    report_path = output_dir / "reference_comparison.md"
+    plot_path = output_dir / "reference_comparison.png"
+    write_reference_comparison(report_path, plot_path, synthetic, reference)
+    print(f"Wrote {report_path}")
+    print(f"Wrote {plot_path}")
+
+
+def render_calibration(output_dir: Path, mode: str, reference_path: Path | None = None) -> None:
+    calibration_mode = "draw" if mode == "both" else mode
+    calibration_dir = output_dir / "calibration"
+    calibration_dir.mkdir(parents=True, exist_ok=True)
+    config = RenderConfig(duration_s=1.8, sample_rate_hz=44_100)
+    reference_analysis = analyze_wav(reference_path) if reference_path is not None else None
+    scored = []
+
+    for index, (name, params) in enumerate(_calibration_candidates(calibration_mode), start=1):
+        result = render_note(calibration_mode, params, config)
+        metrics = diagnostic_metrics(result)
+        analysis = analyze_audio(result.audio, result.sample_rate_hz)
+        score = _calibration_score(metrics, analysis, reference_analysis)
+        stem = f"{index:02d}_{name}"
+        report_path = calibration_dir / f"{stem}_report.md"
+        report_lines = [
+            f"# Calibration Candidate: {name}",
+            "",
+            f"- Mode: {calibration_mode}",
+            f"- Score: {score:.6f}",
+            f"- Stable non-clipped: {'yes' if metrics['stable_non_clipped'] else 'no'}",
+            f"- Fundamental estimate: {analysis.fundamental_hz:.2f} Hz",
+            f"- Harmonic energy ratio, harmonics 2-12 vs fundamental: {analysis.harmonic_energy_ratio:.6f}",
+            f"- Spectral centroid: {analysis.spectral_centroid_hz:.2f} Hz",
+            f"- Spectral rolloff 85%: {analysis.spectral_rolloff_hz:.2f} Hz",
+            f"- Attack time: {analysis.attack_time_s:.3f} s",
+            f"- Attack ratio first/sustain: {metrics['attack_ratio']:.6f}",
+            f"- Mostly sinusoidal: {'yes' if metrics['mostly_sinusoidal'] else 'no'}",
+            f"- Output source: {params.output_source}",
+            f"- Radiation high-pass: {params.radiation_highpass_hz:.1f} Hz",
+            f"- Radiation differentiation mix: {params.radiation_differentiation_mix:.3f}",
+            f"- Body resonance: {params.body_resonance_frequency_hz:.1f} Hz, Q={params.body_resonance_q:.2f}, gain={params.body_resonance_gain:.3f}",
+            f"- Flow-noise amount: {params.flow_noise_amount:.4f}",
+            f"- Chamber volume: {params.chamber_volume_m3:.9e} m^3",
+            f"- Chamber leakage conductance for radiation: {params.chamber_leakage_conductance_m3_s_pa:.9e} m^3/(s Pa)",
+            f"- Vocal tract: {params.vocal_tract_frequency_hz:.1f} Hz, Q={params.vocal_tract_q:.2f}, coupling={params.vocal_tract_impedance_pa_s_m3:.3e}",
+            "",
+        ]
+        if reference_analysis is not None:
+            report_lines.append(f"- Reference similarity score: {comparison_score(analysis, reference_analysis):.6f}")
+            report_lines.append("")
+        report_path.write_text("\n".join(report_lines), encoding="utf-8")
+        scored.append((score, stem, name, params, result, metrics, analysis))
+        print(f"Scored {stem}: {score:.3f}")
+
+    ranked = sorted(scored, key=lambda item: item[0], reverse=True)
+    summary_lines = [
+        "# Calibration Summary",
+        "",
+        f"- Mode: {calibration_mode}",
+        "- Search dimensions: reed Q/damping, rest opening, opening scale, discharge coefficients, chamber volume, leakage-radiation conductance, tract resonance/Q/coupling, output source, radiation settings, flow-noise amount.",
+        "- Reference audio is used only for analysis and ranking when provided.",
+        "",
+    ]
+    for rank, (score, stem, name, params, result, metrics, analysis) in enumerate(ranked, start=1):
+        summary_lines.append(
+            (
+                f"{rank}. {stem}: score={score:.3f}, "
+                f"f0={analysis.fundamental_hz:.2f}Hz, "
+                f"harmonic={analysis.harmonic_energy_ratio:.3f}, "
+                f"centroid={analysis.spectral_centroid_hz:.1f}Hz, "
+                f"rolloff={analysis.spectral_rolloff_hz:.1f}Hz, "
+                f"attack={analysis.attack_time_s:.3f}s, "
+                f"stable={'yes' if metrics['stable_non_clipped'] else 'no'}"
+            )
+        )
+        if rank <= 3:
+            wav_path = calibration_dir / f"best_{rank:02d}_{name}.wav"
+            plot_path = calibration_dir / f"best_{rank:02d}_{name}_analysis.png"
+            write_wav(wav_path, result.audio, result.sample_rate_hz)
+            write_analysis_plot(plot_path, f"Calibration Best {rank}: {name}", analysis)
+            summary_lines.append(f"   WAV: `{wav_path.relative_to(output_dir.parent)}`")
+            summary_lines.append(f"   Plot: `{plot_path.relative_to(output_dir.parent)}`")
+
+    best_score, _, best_name, _, best_result, _, best_analysis = ranked[0]
+    best_report = calibration_dir / "best_candidate_report.md"
+    write_analysis_report(best_report, f"Best Calibration Candidate: {best_name}", best_analysis)
+    if reference_analysis is not None:
+        write_reference_comparison(
+            calibration_dir / "best_reference_comparison.md",
+            calibration_dir / "best_reference_comparison.png",
+            best_analysis,
+            reference_analysis,
+        )
+    summary_path = calibration_dir / "summary.md"
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    print(f"Wrote {summary_path}")
+    print(f"Wrote {best_report}")
+    print(f"Best candidate: {best_name} score={best_score:.3f}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the offline harmonica physical model.")
     parser.add_argument(
@@ -284,6 +550,9 @@ def main() -> None:
         help="render draw note, blow note, or both",
     )
     parser.add_argument("--sweep", action="store_true", help="render Milestone 3D parameter candidates")
+    parser.add_argument("--calibrate", action="store_true", help="run Milestone 5 physical calibration search")
+    parser.add_argument("--analyze-reference", type=Path, default=None, help="analyze a reference WAV without using it as a synthesis source")
+    parser.add_argument("--compare-reference", type=Path, default=None, help="compare rendered output or calibration candidates against a reference WAV")
     parser.add_argument("--attack", type=float, default=None, help="breath attack time in seconds")
     parser.add_argument("--pre-delay", type=float, default=None, help="quiet delay before breath pressure starts")
     parser.add_argument("--release", type=float, default=None, help="breath release time in seconds")
@@ -297,7 +566,11 @@ def main() -> None:
     args = parser.parse_args()
 
     output_dir = PROJECT_ROOT / "outputs"
-    if args.sweep:
+    if args.analyze_reference is not None:
+        analyze_reference(output_dir, args.analyze_reference)
+    elif args.calibrate:
+        render_calibration(output_dir, args.mode, args.compare_reference)
+    elif args.sweep:
         render_sweep(output_dir)
     else:
         config = RenderConfig(duration_s=args.duration, sample_rate_hz=44_100)
@@ -321,6 +594,8 @@ def main() -> None:
                 pressure_pa=args.pressure,
             )
             render_both(output_dir, draw_params, blow_params, config)
+            if args.compare_reference is not None:
+                compare_render_to_reference(output_dir, render_note("draw", draw_params, config), args.compare_reference)
         else:
             params = _params_with_breath_controls(
                 _preset_for_mode(args.mode),
@@ -331,7 +606,9 @@ def main() -> None:
                 release_s=args.release,
                 pressure_pa=args.pressure,
             )
-            render_mode_outputs(output_dir, args.mode, params, config)
+            result = render_mode_outputs(output_dir, args.mode, params, config)
+            if args.compare_reference is not None:
+                compare_render_to_reference(output_dir, result, args.compare_reference)
 
 
 if __name__ == "__main__":

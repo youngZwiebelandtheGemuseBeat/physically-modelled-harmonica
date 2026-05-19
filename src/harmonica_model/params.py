@@ -46,6 +46,15 @@ class ModelParams:
     chamber_pressure_output_gain: float
     draw_flow_output_gain_pa_s_m3: float
     blow_flow_output_gain_pa_s_m3: float
+    output_source: str
+    chamber_leakage_conductance_m3_s_pa: float
+    radiation_highpass_hz: float
+    radiation_differentiation_mix: float
+    body_resonance_frequency_hz: float
+    body_resonance_q: float
+    body_resonance_gain: float
+    flow_noise_amount: float
+    flow_noise_seed: int
 
     @property
     def vocal_tract_omega_rad_s(self) -> float:
@@ -144,6 +153,15 @@ DEFAULT_PARAMS = ModelParams(
     chamber_pressure_output_gain=0.0,
     draw_flow_output_gain_pa_s_m3=1.0e7,
     blow_flow_output_gain_pa_s_m3=0.0,
+    output_source="mix",
+    chamber_leakage_conductance_m3_s_pa=0.0,
+    radiation_highpass_hz=90.0,
+    radiation_differentiation_mix=0.18,
+    body_resonance_frequency_hz=1700.0,
+    body_resonance_q=1.6,
+    body_resonance_gain=0.10,
+    flow_noise_amount=0.0,
+    flow_noise_seed=17,
 )
 
 
@@ -197,4 +215,13 @@ BLOW_PARAMS = ModelParams(
     chamber_pressure_output_gain=0.0,
     draw_flow_output_gain_pa_s_m3=0.0,
     blow_flow_output_gain_pa_s_m3=1.0e7,
+    output_source="mix",
+    chamber_leakage_conductance_m3_s_pa=0.0,
+    radiation_highpass_hz=90.0,
+    radiation_differentiation_mix=0.18,
+    body_resonance_frequency_hz=1600.0,
+    body_resonance_q=1.5,
+    body_resonance_gain=0.08,
+    flow_noise_amount=0.0,
+    flow_noise_seed=23,
 )

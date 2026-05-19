@@ -188,7 +188,42 @@ Current result:
 - blow now has sustained reed oscillation and blow-reed near closure
 - both modes can still use further tone-quality and brightness tuning
 
-## Milestone 5: Vocal-Tract Sweep / Bend Demonstration
+## Milestone 5: Reference-Based Calibration And Radiation Layer
+
+Status: Done. First reference-analysis and calibration implementation is
+available.
+
+Milestone 5 improves realism without replacing the physical model:
+
+- optional reference WAV analysis for measurement only
+- synthetic-vs-reference comparison reports and plots
+- high-pass/differentiating radiation tendency for simulated flow/pressure
+- optional low-Q body/chamber coloration
+- optional low-level flow-driven turbulent noise
+- bounded physical parameter calibration over reed Q/damping, openings,
+  discharge coefficients, chamber volume/leakage-radiation conductance, tract
+  resonance/Q/coupling, output source, radiation settings, and flow-noise amount
+
+Commands:
+
+```text
+python run.py --analyze-reference path/to/reference.wav
+python run.py --mode draw --compare-reference path/to/reference.wav
+python run.py --calibrate
+```
+
+Current calibration result:
+
+- best candidate: `brighter_flow_radiation`
+- harmonic energy ratio, harmonics 2-12 vs fundamental: `1.017`
+- spectral centroid: `765.7 Hz`
+- top WAVs written under `outputs/calibration/`
+
+Reference WAVs are never used as a synthesis source. The ODE state derivative
+continues to implement the proposal reed, Bernoulli flow, chamber pressure, and
+vocal-tract equations.
+
+## Milestone 5B: Vocal-Tract Sweep / Bend Demonstration
 
 Add a vocal-tract parameter sweep / bend demonstration. Do not use fake pitch
 shifting. Bending must come from changing vocal-tract resonance/loading

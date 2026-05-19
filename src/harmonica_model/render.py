@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from .audio import physical_output_signal
 from .equations import (
     P_C,
     P_T,
@@ -69,14 +70,6 @@ class RenderResult:
         return self.state[V_T]
 
 
-def _normalize_audio(signal: np.ndarray, peak: float = 0.85) -> np.ndarray:
-    values = np.asarray(signal, dtype=float)
-    max_abs = float(np.max(np.abs(values)))
-    if max_abs <= 0.0:
-        return values
-    return values * (peak / max_abs)
-
-
 def render_note(
     mode: str,
     params: ModelParams = DEFAULT_PARAMS,
@@ -108,7 +101,27 @@ def render_note(
         [np.interp(time_s, integration_time_s, integrated_state[row]) for row in range(STATE_SIZE)]
     )
     derived = [derived_values(float(t), state[:, i], params) for i, t in enumerate(time_s)]
-    raw_audio = np.array([value.audio_pressure for value in derived], dtype=float)
+    p_m = np.array([value.p_m for value in derived], dtype=float)
+    breath = np.array([value.breath_envelope for value in derived], dtype=float)
+    delta_p_b = np.array([value.delta_p_b for value in derived], dtype=float)
+    delta_p_d = np.array([value.delta_p_d for value in derived], dtype=float)
+    area_b = np.array([value.area_b for value in derived], dtype=float)
+    area_d = np.array([value.area_d for value in derived], dtype=float)
+    q_b = np.array([value.q_b for value in derived], dtype=float)
+    q_d = np.array([value.q_d for value in derived], dtype=float)
+    force_b = np.array([value.force_b for value in derived], dtype=float)
+    force_d = np.array([value.force_d for value in derived], dtype=float)
+    dp_c = np.array([value.dp_c for value in derived], dtype=float)
+    audio = physical_output_signal(
+        params=params,
+        sample_rate_hz=config.sample_rate_hz,
+        p_c=state[P_C],
+        p_t=state[P_T],
+        q_b=q_b,
+        q_d=q_d,
+        delta_p_b=delta_p_b,
+        delta_p_d=delta_p_d,
+    )
 
     return RenderResult(
         mode=mode,
@@ -116,18 +129,18 @@ def render_note(
         time_s=time_s,
         params=params,
         state=state,
-        audio=_normalize_audio(raw_audio),
-        p_m=np.array([value.p_m for value in derived], dtype=float),
-        breath_envelope=np.array([value.breath_envelope for value in derived], dtype=float),
-        delta_p_b=np.array([value.delta_p_b for value in derived], dtype=float),
-        delta_p_d=np.array([value.delta_p_d for value in derived], dtype=float),
-        area_b=np.array([value.area_b for value in derived], dtype=float),
-        area_d=np.array([value.area_d for value in derived], dtype=float),
-        q_b=np.array([value.q_b for value in derived], dtype=float),
-        q_d=np.array([value.q_d for value in derived], dtype=float),
-        force_b=np.array([value.force_b for value in derived], dtype=float),
-        force_d=np.array([value.force_d for value in derived], dtype=float),
-        dp_c=np.array([value.dp_c for value in derived], dtype=float),
+        audio=audio,
+        p_m=p_m,
+        breath_envelope=breath,
+        delta_p_b=delta_p_b,
+        delta_p_d=delta_p_d,
+        area_b=area_b,
+        area_d=area_d,
+        q_b=q_b,
+        q_d=q_d,
+        force_b=force_b,
+        force_d=force_d,
+        dp_c=dp_c,
     )
 
 

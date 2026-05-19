@@ -15,6 +15,9 @@ without adding a fake synthesis layer.
 - opening function and reed closure
 - output choice from `p_c`, `Q_b`, `Q_d`, or a weighted physical combination
 - vocal-tract resonance, Q, and loading parameters for bending demonstrations
+- radiation high-pass / differentiating tendency for simulated flow output
+- low-Q body/chamber coloration
+- low-level turbulent flow noise driven by simulated flows and pressure drops
 
 ## Disallowed Tuning Shortcuts
 
@@ -157,6 +160,46 @@ Use `outputs/comparison_report.md` and
 - the draw report estimates draw-reed dominance
 - the blow report estimates blow-reed dominance
 - both modes remain stable and non-silent
+
+## Milestone 5 Reference And Calibration Protocol
+
+Reference audio may be used only for measurement and comparison:
+
+```text
+python run.py --analyze-reference path/to/reference.wav
+python run.py --mode draw --compare-reference path/to/reference.wav
+python run.py --calibrate
+python run.py --calibrate --compare-reference path/to/reference.wav
+```
+
+The analysis reports estimate fundamental frequency, harmonic amplitudes 1-12,
+harmonic energy ratio, spectral centroid, 85% spectral rolloff, attack time,
+RMS envelope, and spectral envelope.
+
+The calibration command ranks physical candidates by harmonic energy ratio,
+spectral centroid, non-sinusoidal waveform behavior, stable attack, and
+reference similarity when a reference is provided. Reject candidates that sound
+brighter only because the internal model became unstable or clipped.
+
+Radiation tuning rules:
+
+- Flow output may be high-passed or partly differentiated because compact flow
+  radiation tends toward pressure proportional to volume velocity derivative.
+- Body coloration must remain a low-Q coloration of the simulated source, not a
+  narrow resonator that creates an independent note.
+- Flow-noise amount must remain low and must be driven by `abs(Q_b)`,
+  `abs(Q_d)`, and pressure drops. Do not add a constant noise bed.
+- Reference files must not be loaded into the renderer, looped, resynthesized,
+  pitch-shifted, or used as wavetables.
+
+Current `--calibrate` baseline:
+
+- best candidate: `brighter_flow_radiation`
+- harmonic energy ratio: `1.017`
+- spectral centroid: `765.7 Hz`
+- top WAVs: `outputs/calibration/best_01_brighter_flow_radiation.wav`,
+  `outputs/calibration/best_02_tract_near_second_harmonic.wav`, and
+  `outputs/calibration/best_03_tighter_active_opening.wav`
 
 ## Milestone 3 Acceptance Checks
 

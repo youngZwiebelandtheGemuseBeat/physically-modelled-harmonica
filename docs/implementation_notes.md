@@ -11,7 +11,9 @@ meaningful mouth-pressure envelope before the reed force and Bernoulli flow
 equations are evaluated, rather than fading the rendered WAV afterward.
 Milestone 4 adds explicit draw, blow, and both render modes using the same
 coupled physical model with mode-specific signed pressure and parameter
-presets.
+presets. Milestone 5 adds reference-based analysis, synthetic/reference
+comparison, a more explicit radiation/output layer, low-level flow-driven noise,
+and a bounded physical parameter calibration search.
 
 Milestone 2 implements the full proposal state vector
 `[x_b, v_b, x_d, v_d, p_c, p_t, v_t]` in one coupled ODE system solved with
@@ -62,6 +64,24 @@ Approximations:
   component. Sweep mode also renders flow-only and parameter variants. These
   are documented output choices from `p_t`, `Q_d`, and related simulated
   pressure/flow states, not oscillator layering or fake subtractive synthesis.
+- Milestone 5 moves the final audio construction into a documented radiation
+  layer. The raw source can be `p_c`, `p_t`, `Q_b`, `Q_d`, `Q_b - Q_d`, or the
+  existing physical pressure/flow mix. Flow-derived sources are high-passed and
+  partly differentiated to approximate the pressure radiation tendency of a
+  compact acoustic flow source. This is output radiation from simulated states,
+  not a replacement oscillator.
+- Optional body/chamber coloration is a low-Q resonant filter applied after the
+  simulated pressure/flow source. It approximates broad cover-plate, hand, and
+  small-cavity coloration. It is intentionally low-Q and cannot create a note by
+  itself.
+- Optional flow noise is disabled by default. When enabled, its amplitude is
+  multiplied by `(|Q_b| + |Q_d|) * sqrt(|DeltaP_b| + |DeltaP_d|)`, so it grows
+  only when the Bernoulli flows and pressure drops indicate turbulent flow. It
+  is a low-level turbulence/noisy-jet approximation, not an arbitrary noise bed.
+- `chamber_leakage_conductance_m3_s_pa` is used only in the radiation/output
+  stage as a small pressure-proportional leakage flow contribution. The core
+  chamber pressure ODE remains the proposal equation
+  `p_c' = rho c^2 / V_c * (Q_b - Q_d)`.
 - The draw note uses a signed mouth-pressure source
   `p_m_source(t) = mouth_pressure_pa * envelope(t)`. For the default draw note,
   `mouth_pressure_pa` is negative. The envelope is zero during `pre_delay_s`,
@@ -103,6 +123,19 @@ Approximations:
   parameter choices than accepting the stable reed-closure result.
 - `python run.py --mode both` renders draw and blow outputs and writes
   `outputs/comparison_report.md` plus `outputs/comparison_diagnostics.png`.
+- `python run.py --analyze-reference path/to/reference.wav` analyzes an
+  external reference WAV for comparison only. It writes
+  `outputs/reference_analysis.md` and `outputs/reference_analysis.png`.
+- `python run.py --mode draw --compare-reference path/to/reference.wav` renders
+  the physical model, analyzes both signals, and writes
+  `outputs/reference_comparison.md` plus `outputs/reference_comparison.png`.
+  Reference audio is never used as a synthesis source.
+- `python run.py --calibrate` renders a bounded set of physical candidates and
+  writes ranked reports plus the best candidate WAVs under
+  `outputs/calibration/`. The current best draw candidate is
+  `brighter_flow_radiation`, which increases the harmonic energy ratio from the
+  radiated baseline `0.788` to `1.017` and the centroid from about `684 Hz` to
+  about `766 Hz` in the calibration analysis.
 
 ## Current Acoustic Observations
 
