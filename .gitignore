@@ -219,3 +219,8 @@ __marimo__/
 
 # output data
 outputs/
+
+# codex data
+.DS_Store
+.codex/
+.TODO.md
