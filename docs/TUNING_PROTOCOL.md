@@ -153,3 +153,107 @@ The target for the next iteration is:
 - `Mostly sinusoidal: no`
 - one reed near-closed between `5%` and `60%`
 - stable, non-silent output
+
+## Current Milestone 3B Baseline
+
+The current default render is the Milestone 3B baseline. It uses the full
+coupled proposal model from Milestone 2, with stronger reed-slot nonlinearity
+and documented closure damping. The sound now begins to resemble a harmonica,
+but the natural breath/fade-in envelope became weaker after the stronger
+nonlinear tuning.
+
+Latest default metrics from `outputs/draw_note_report.md`:
+
+- peak audio: `0.850000`
+- RMS audio: `0.406446`
+- estimated fundamental: `444.00 Hz`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701431`
+- spectral centroid: `656.91 Hz`
+- spectral centroid / f0: `1.48`
+- mostly sinusoidal: `no`
+- attack strength: `5432.41`
+- RMS `x_b`: `2.028569135e-05 m`
+- RMS `x_d`: `3.108101046e-05 m`
+- RMS `p_c`: `2.110078032e+02 Pa`
+- RMS `p_t`: `5.268223672e+02 Pa`
+- RMS `Q_b`: `1.228234951e-06 m^3/s`
+- RMS `Q_d`: `1.870442404e-06 m^3/s`
+- blow reed opening near closed: `0.00%`
+- draw reed opening near closed: `47.30%`
+- chamber pressure feedback nonzero: `yes`
+- reed participation: `both reeds participate`
+
+Metric interpretation:
+
+- Harmonic energy ratio `0.701431` and `mostly sinusoidal: no` mean Milestone
+  3B has moved well beyond the stable but sine-like Milestone 1 tone.
+- Spectral centroid / f0 `1.48` means the tone has useful harmonic content but
+  is still not as bright as the optional `2x f0` target.
+- Draw reed near closure at `47.30%` means the active reed-slot aperture is
+  entering the nonlinear region for a meaningful part of the note.
+- Blow reed near closure at `0.00%` is acceptable for the current draw-note
+  preset but remains a possible tuning target for later blow/draw balance.
+- Nonzero chamber pressure feedback and both-reed participation confirm that
+  the sound comes from the coupled physical model, not from an isolated reed or
+  post-processing trick.
+
+Current strengths:
+
+- stable, non-clipped, non-silent output
+- strong harmonic improvement over the Milestone 1 sine-like baseline
+- full Milestone 2 coupled model remains active
+- reed-slot modulation is visible in diagnostics
+- chamber and vocal-tract states contribute to the pressure/flow output
+
+Current weaknesses:
+
+- the onset is less naturally breath-shaped than desired
+- the current default pressure drive emphasizes quick excitation over a
+  controllable breath attack
+- the spectral centroid is below the aspirational `2x f0` target
+- the current draw preset mainly closes the draw reed, while the blow reed stays
+  open
+
+## Milestone 3C Breath-Envelope Tuning
+
+The next tuning step is to restore attack behavior physically through the mouth
+pressure source. Add a smooth `p_breath(t)` and use it as the source for `p_m`
+inside the ODE drive path. Do not use an arbitrary audio fade after rendering as
+the main solution.
+
+Required controls:
+
+- `attack_time`
+- `release_time`
+- `sustain_pressure`
+- optional `breath_noise_amount`, default `0`
+
+Recommended envelope shape:
+
+- raised cosine attack from zero pressure to `sustain_pressure`
+- held sustain region
+- raised cosine or exponential release back toward zero pressure
+
+Tuning procedure for Milestone 3C:
+
+1. Keep the Milestone 3B reed, chamber, flow, and vocal-tract equations
+   unchanged.
+2. Use `p_breath(t)` to define the mouth pressure `p_m(t)` that drives the
+   existing pressure force and Bernoulli flow equations.
+3. Start with a moderate attack, for example `0.20 s` to `0.30 s`, and compare
+   the onset against the current default render.
+4. Adjust `sustain_pressure` only enough to preserve stable self-excitation and
+   the Milestone 3B harmonic ratio.
+5. Use release time to model breath shutdown within the pressure source, not as
+   a post-render WAV fade.
+6. Plot `p_breath(t)` or `p_m(t)` in diagnostics and include attack time,
+   release time, and sustain pressure in the report.
+
+Acceptance for Milestone 3C:
+
+- `pytest` passes
+- `python run.py` works
+- attack is audible and smooth
+- the sound remains more harmonica-like than Milestone 2
+- diagnostics show the pressure envelope
+- the report includes `attack_time`, `release_time`, and `sustain_pressure`

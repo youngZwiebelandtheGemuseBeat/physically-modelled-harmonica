@@ -1,5 +1,14 @@
 # Implementation Notes
 
+Current project state: Milestone 1 produced a stable but sine-like tone.
+Milestone 2 implemented the full coupled proposal model. Milestone 3B increased
+harmonic content and reed character through stronger reed-slot nonlinearity,
+documented closure damping, and a pressure/flow output derived from simulated
+states. The sound now begins to resemble a harmonica, but the natural
+breath/fade-in envelope became weaker after stronger nonlinear tuning. The next
+step is to restore attack behavior through a physically meaningful
+mouth-pressure envelope rather than a post-audio fade.
+
 Milestone 2 implements the full proposal state vector
 `[x_b, v_b, x_d, v_d, p_c, p_t, v_t]` in one coupled ODE system solved with
 `scipy.integrate.solve_ivp`. The default solver method is DOP853, which handled
@@ -63,3 +72,82 @@ Approximations:
   content substantially over the Milestone 3A baseline, but the spectral
   centroid remains below 2x f0; forcing that target harder caused less useful
   parameter choices than accepting the stable reed-closure result.
+
+## Current Acoustic Observations
+
+The current default render is audibly closer to a harmonica than the Milestone 1
+and Milestone 2 baselines. It has a clear reed-centered pitch, stronger harmonic
+content, and a less purely sinusoidal waveform. The stronger nonlinear
+reed-slot tuning makes the tone more reed-like, but the breath-shaped onset is
+less natural than desired. The next audible improvement should be a smooth,
+controllable pressure attack rather than more output processing.
+
+## Current Diagnostic Metrics
+
+Latest default metrics from `outputs/draw_note_report.md`:
+
+- peak audio: `0.850000`
+- RMS audio: `0.406446`
+- estimated fundamental: `444.00 Hz`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701431`
+- spectral centroid: `656.91 Hz`
+- spectral centroid / f0: `1.48`
+- mostly sinusoidal: `no`
+- attack strength: `5432.41`
+- RMS `x_b`: `2.028569135e-05 m`
+- RMS `x_d`: `3.108101046e-05 m`
+- RMS `p_c`: `2.110078032e+02 Pa`
+- RMS `p_t`: `5.268223672e+02 Pa`
+- RMS `Q_b`: `1.228234951e-06 m^3/s`
+- RMS `Q_d`: `1.870442404e-06 m^3/s`
+- blow reed opening near closed: `0.00%`
+- draw reed opening near closed: `47.30%`
+- chamber pressure feedback nonzero: `yes`
+- reed participation: `both reeds participate`
+
+Interpretation:
+
+- The harmonic energy ratio is well above the `0.05` Milestone 3B threshold, so
+  the output is no longer dominated by only the fundamental.
+- `Mostly sinusoidal: no` confirms that the render moved beyond the stable but
+  sine-like Milestone 1 result.
+- Spectral centroid / f0 `1.48` shows added brightness, but it remains below
+  the optional `2x f0` target.
+- Draw reed near closure at `47.30%` shows that the reed-slot nonlinearity is
+  physically active for a meaningful part of the note.
+- Nonzero `p_c`, `p_t`, `Q_b`, and `Q_d` RMS values show that the chamber,
+  vocal tract, and flows are participating in the coupled model.
+
+## Current Strengths And Weaknesses
+
+Strengths:
+
+- stable non-silent offline render
+- full Milestone 2 state vector and equation set remain in use
+- stronger harmonic content and reed character after Milestone 3B
+- physically coupled chamber pressure feedback
+- both reeds participate in the current draw-note render
+- no samples, wavetables, fake sawtooth/filter synthesis, or pitch shifting
+
+Weaknesses:
+
+- breath attack is not yet as natural or controllable as desired
+- current brightness remains below the aspirational `2x f0` centroid target
+- blow reed near-closure is not active in the current draw-note preset
+- the current default pressure drive favors reliable excitation over expressive
+  breath shaping
+
+## Tuning Direction
+
+The next tuning direction is Milestone 3C: restore a physically plausible breath
+envelope by driving the existing model with a time-varying mouth pressure source
+`p_breath(t)`. This should expose `attack_time`, `release_time`,
+`sustain_pressure`, and optional `breath_noise_amount` parameters while keeping
+the reed, chamber, Bernoulli flow, and vocal-tract equations unchanged.
+
+The rationale is physical: in a real harmonica note, the player does not apply
+full pressure instantaneously. A smooth pressure buildup changes the pressure
+drops that drive reed force and airflow, so the attack emerges from the ODE
+states. A post-audio fade would only hide the rendered onset after the model has
+already run; it would not change reed excitation, chamber pressure feedback, or
+flow nonlinearity.
