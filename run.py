@@ -15,12 +15,14 @@ if str(SRC_ROOT) not in sys.path:
 from harmonica_model.audio import write_wav
 from harmonica_model.diagnostics import (
     diagnostic_metrics,
+    write_comparison_diagnostics_plot,
+    write_comparison_report,
     write_diagnostic_report,
     write_diagnostics_plot,
     write_trace_csv,
 )
-from harmonica_model.params import DEFAULT_PARAMS, ModelParams, ReedParams, RenderConfig
-from harmonica_model.render import render_draw_note
+from harmonica_model.params import BLOW_PARAMS, DEFAULT_PARAMS, DRAW_PARAMS, ModelParams, ReedParams, RenderConfig
+from harmonica_model.render import RenderResult, render_draw_note, render_note
 
 
 def _reed_with_q(reed: ReedParams, quality_factor: float) -> ReedParams:
@@ -142,13 +144,26 @@ def _write_sweep_report(path: Path, name: str, metrics: dict[str, float | bool |
     )
 
 
-def _signed_draw_pressure(value_pa: float) -> float:
-    return -abs(value_pa) if value_pa > 0.0 else value_pa
+def _signed_mode_pressure(value_pa: float, mode: str) -> float:
+    if mode == "draw":
+        return -abs(value_pa)
+    if mode == "blow":
+        return abs(value_pa)
+    raise ValueError(f"unsupported mode: {mode}")
+
+
+def _preset_for_mode(mode: str) -> ModelParams:
+    if mode == "draw":
+        return DRAW_PARAMS
+    if mode == "blow":
+        return BLOW_PARAMS
+    raise ValueError(f"unsupported mode: {mode}")
 
 
 def _params_with_breath_controls(
     params: ModelParams,
     *,
+    mode: str,
     duration_s: float,
     pre_delay_s: float | None,
     attack_s: float | None,
@@ -163,7 +178,7 @@ def _params_with_breath_controls(
     if release_s is not None:
         next_params = replace(next_params, release_s=release_s)
     if pressure_pa is not None:
-        next_params = replace(next_params, mouth_pressure_pa=_signed_draw_pressure(pressure_pa))
+        next_params = replace(next_params, mouth_pressure_pa=_signed_mode_pressure(pressure_pa, mode))
 
     release_start_s = max(
         next_params.pre_delay_s + next_params.attack_s,
@@ -172,20 +187,21 @@ def _params_with_breath_controls(
     return replace(next_params, release_start_s=release_start_s)
 
 
-def render_default(output_dir: Path, params: ModelParams, config: RenderConfig) -> None:
+def render_mode_outputs(output_dir: Path, mode: str, params: ModelParams, config: RenderConfig) -> RenderResult:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    result = render_draw_note(params, config)
+    result = render_note(mode, params, config)
 
-    wav_path = output_dir / "draw_note.wav"
-    csv_path = output_dir / "draw_note_trace.csv"
-    png_path = output_dir / "draw_note_diagnostics.png"
-    report_path = output_dir / "draw_note_report.md"
+    stem = f"{mode}_note"
+    wav_path = output_dir / f"{stem}.wav"
+    csv_path = output_dir / f"{stem}_trace.csv"
+    png_path = output_dir / f"{stem}_diagnostics.png"
+    report_path = output_dir / f"{stem}_report.md"
 
     write_wav(wav_path, result.audio, result.sample_rate_hz)
     write_trace_csv(csv_path, result)
-    write_diagnostics_plot(png_path, result)
-    write_diagnostic_report(report_path, result)
+    write_diagnostics_plot(png_path, result, mode)
+    write_diagnostic_report(report_path, result, mode)
 
     peak = float(abs(result.audio).max())
     rms = float((result.audio**2).mean() ** 0.5)
@@ -193,7 +209,7 @@ def render_default(output_dir: Path, params: ModelParams, config: RenderConfig) 
     print(f"Wrote {csv_path}")
     print(f"Wrote {png_path}")
     print(f"Wrote {report_path}")
-    print(f"Audio peak={peak:.6f}, rms={rms:.6f}")
+    print(f"{mode.title()} audio peak={peak:.6f}, rms={rms:.6f}")
     print(
         "Breath "
         f"pre_delay={params.pre_delay_s:.3f}s, "
@@ -201,6 +217,23 @@ def render_default(output_dir: Path, params: ModelParams, config: RenderConfig) 
         f"release={params.release_s:.3f}s, "
         f"pressure={params.mouth_pressure_pa:.1f}Pa"
     )
+    return result
+
+
+def render_default(output_dir: Path, params: ModelParams, config: RenderConfig) -> None:
+    render_mode_outputs(output_dir, "draw", params, config)
+
+
+def render_both(output_dir: Path, draw_params: ModelParams, blow_params: ModelParams, config: RenderConfig) -> None:
+    draw_result = render_mode_outputs(output_dir, "draw", draw_params, config)
+    blow_result = render_mode_outputs(output_dir, "blow", blow_params, config)
+
+    comparison_report_path = output_dir / "comparison_report.md"
+    comparison_plot_path = output_dir / "comparison_diagnostics.png"
+    write_comparison_report(comparison_report_path, draw_result, blow_result)
+    write_comparison_diagnostics_plot(comparison_plot_path, draw_result, blow_result)
+    print(f"Wrote {comparison_report_path}")
+    print(f"Wrote {comparison_plot_path}")
 
 
 def render_sweep(output_dir: Path) -> None:
@@ -244,6 +277,12 @@ def render_sweep(output_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the offline harmonica physical model.")
+    parser.add_argument(
+        "--mode",
+        choices=("draw", "blow", "both"),
+        default="draw",
+        help="render draw note, blow note, or both",
+    )
     parser.add_argument("--sweep", action="store_true", help="render Milestone 3D parameter candidates")
     parser.add_argument("--attack", type=float, default=None, help="breath attack time in seconds")
     parser.add_argument("--pre-delay", type=float, default=None, help="quiet delay before breath pressure starts")
@@ -252,7 +291,7 @@ def main() -> None:
         "--pressure",
         type=float,
         default=None,
-        help="draw sustain pressure in Pa; positive values are treated as draw suction",
+        help="sustain pressure magnitude in Pa; sign is set by --mode",
     )
     parser.add_argument("--duration", type=float, default=2.5, help="render duration in seconds")
     args = parser.parse_args()
@@ -261,16 +300,38 @@ def main() -> None:
     if args.sweep:
         render_sweep(output_dir)
     else:
-        params = _params_with_breath_controls(
-            DEFAULT_PARAMS,
-            duration_s=args.duration,
-            pre_delay_s=args.pre_delay,
-            attack_s=args.attack,
-            release_s=args.release,
-            pressure_pa=args.pressure,
-        )
         config = RenderConfig(duration_s=args.duration, sample_rate_hz=44_100)
-        render_default(output_dir, params, config)
+        if args.mode == "both":
+            draw_params = _params_with_breath_controls(
+                _preset_for_mode("draw"),
+                mode="draw",
+                duration_s=args.duration,
+                pre_delay_s=args.pre_delay,
+                attack_s=args.attack,
+                release_s=args.release,
+                pressure_pa=args.pressure,
+            )
+            blow_params = _params_with_breath_controls(
+                _preset_for_mode("blow"),
+                mode="blow",
+                duration_s=args.duration,
+                pre_delay_s=args.pre_delay,
+                attack_s=args.attack,
+                release_s=args.release,
+                pressure_pa=args.pressure,
+            )
+            render_both(output_dir, draw_params, blow_params, config)
+        else:
+            params = _params_with_breath_controls(
+                _preset_for_mode(args.mode),
+                mode=args.mode,
+                duration_s=args.duration,
+                pre_delay_s=args.pre_delay,
+                attack_s=args.attack,
+                release_s=args.release,
+                pressure_pa=args.pressure,
+            )
+            render_mode_outputs(output_dir, args.mode, params, config)
 
 
 if __name__ == "__main__":

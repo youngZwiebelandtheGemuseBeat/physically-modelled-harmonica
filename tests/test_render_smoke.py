@@ -12,8 +12,9 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from harmonica_model.diagnostics import diagnostic_metrics, write_diagnostic_report
-from harmonica_model.params import DEFAULT_PARAMS, RenderConfig
-from harmonica_model.render import render_draw_note
+from harmonica_model.params import BLOW_PARAMS, DEFAULT_PARAMS, DRAW_PARAMS, RenderConfig
+from harmonica_model.render import render_draw_note, render_note
+from run import render_both, render_mode_outputs
 
 
 def test_render_smoke_produces_non_silent_audio() -> None:
@@ -26,6 +27,56 @@ def test_render_smoke_produces_non_silent_audio() -> None:
     assert np.all(np.isfinite(result.audio))
     assert float(np.max(np.abs(result.audio))) > 1.0e-4
     assert float(np.sqrt(np.mean(result.audio**2))) > 1.0e-5
+
+
+def test_draw_mode_runs_and_writes_outputs(tmp_path: Path) -> None:
+    config = RenderConfig(duration_s=0.12, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    result = render_mode_outputs(tmp_path, "draw", DRAW_PARAMS, config)
+
+    assert result.mode == "draw"
+    assert (tmp_path / "draw_note.wav").exists()
+    assert (tmp_path / "draw_note_trace.csv").exists()
+    assert (tmp_path / "draw_note_diagnostics.png").exists()
+    assert (tmp_path / "draw_note_report.md").exists()
+
+
+def test_blow_mode_runs_and_writes_outputs(tmp_path: Path) -> None:
+    config = RenderConfig(duration_s=0.12, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    result = render_mode_outputs(tmp_path, "blow", BLOW_PARAMS, config)
+
+    assert result.mode == "blow"
+    assert (tmp_path / "blow_note.wav").exists()
+    assert (tmp_path / "blow_note_trace.csv").exists()
+    assert (tmp_path / "blow_note_diagnostics.png").exists()
+    assert (tmp_path / "blow_note_report.md").exists()
+
+
+def test_both_mode_runs_and_writes_comparison_outputs(tmp_path: Path) -> None:
+    config = RenderConfig(duration_s=0.12, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    render_both(tmp_path, DRAW_PARAMS, BLOW_PARAMS, config)
+
+    assert (tmp_path / "draw_note.wav").exists()
+    assert (tmp_path / "blow_note.wav").exists()
+    assert (tmp_path / "comparison_report.md").exists()
+    assert (tmp_path / "comparison_diagnostics.png").exists()
+
+
+def test_draw_and_blow_outputs_are_not_identical() -> None:
+    config = RenderConfig(duration_s=0.50, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    draw_result = render_note("draw", DRAW_PARAMS, config)
+    blow_result = render_note("blow", BLOW_PARAMS, config)
+    blow_sustain = (blow_result.time_s >= 0.25) & (blow_result.time_s < 0.45)
+
+    assert draw_result.audio.shape == blow_result.audio.shape
+    assert not np.allclose(draw_result.audio, blow_result.audio)
+    assert float(np.sqrt(np.mean(draw_result.audio**2))) > 1.0e-5
+    assert float(np.sqrt(np.mean(blow_result.audio**2))) > 1.0e-5
+    assert float(np.std(blow_result.audio[blow_sustain])) > 0.05
+    assert float(np.std(blow_result.x_b[blow_sustain])) > 1.0e-6
 
 
 def test_render_exposes_full_coupled_state_and_feedback() -> None:
@@ -91,4 +142,6 @@ def test_diagnostic_report_contains_audit_metrics(tmp_path: Path) -> None:
     assert "Attack ratio first/sustain" in report
     assert "Breath Envelope Parameters" in report
     assert "Chamber pressure feedback nonzero" in report
+    assert "Dominant reed estimate" in report
+    assert "Sign Convention" in report
     assert "Equation Audit" in report

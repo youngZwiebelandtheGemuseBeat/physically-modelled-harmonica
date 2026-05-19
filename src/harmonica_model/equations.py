@@ -5,7 +5,7 @@ from math import sqrt
 
 import numpy as np
 
-from .controls import breath_envelope, draw_mouth_pressure
+from .controls import breath_envelope, mouth_pressure_source
 from .params import ModelParams, ReedParams
 
 
@@ -90,7 +90,7 @@ def chamber_pressure_derivative(q_b_m3_s: float, q_d_m3_s: float, params: ModelP
 
 def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.ndarray:
     x_b, v_b, x_d, v_d, p_c, p_t, v_t = state
-    p_m = draw_mouth_pressure(t_s, params)
+    p_m = mouth_pressure_source(t_s, params)
 
     area_b = reed_opening_area(x_b, params.blow_reed)
     area_d = reed_opening_area(x_d, params.draw_reed)
@@ -145,7 +145,7 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
 
 def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> DerivedValues:
     x_b, _, x_d, _, p_c, p_t, _ = state
-    p_m = draw_mouth_pressure(t_s, params)
+    p_m = mouth_pressure_source(t_s, params)
     envelope = breath_envelope(t_s, params)
     area_b = reed_opening_area(x_b, params.blow_reed)
     area_d = reed_opening_area(x_d, params.draw_reed)

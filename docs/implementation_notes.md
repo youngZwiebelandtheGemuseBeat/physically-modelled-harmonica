@@ -9,6 +9,9 @@ breath/fade-in envelope became weaker after stronger nonlinear tuning.
 Milestone 3D restores the audible Einschwingen by applying a physically
 meaningful mouth-pressure envelope before the reed force and Bernoulli flow
 equations are evaluated, rather than fading the rendered WAV afterward.
+Milestone 4 adds explicit draw, blow, and both render modes using the same
+coupled physical model with mode-specific signed pressure and parameter
+presets.
 
 Milestone 2 implements the full proposal state vector
 `[x_b, v_b, x_d, v_d, p_c, p_t, v_t]` in one coupled ODE system solved with
@@ -28,11 +31,13 @@ Approximations:
   law `A_i = max(A_min, W_i * max(0, h_i0 + sigma_i * x_i))`. The default
   `A_min` is zero so a geometrically closed reed has zero Bernoulli flow, which
   preserves the test contract for closed openings.
-- `sigma_i` is the displacement-to-gap sign convention. The blow reed uses
-  positive `sigma_b`, so positive blow-reed displacement increases its gap. The
-  draw reed uses negative `sigma_d`, so positive draw-reed displacement reduces
-  its gap during the draw-note closure part of the cycle. This makes the draw
-  opening enter near closure periodically without adding a synthetic waveform.
+- `sigma_i` is the displacement-to-gap sign convention and can differ by
+  mode-specific preset. In the draw preset, the draw reed uses negative
+  `sigma_d`, so positive draw-reed displacement reduces its gap during the
+  draw-note closure part of the cycle. In the blow preset, the blow reed uses
+  positive displacement-to-gap coupling with a small rest opening. This lets
+  the positive-pressure blow reed periodically enter the near-closed nonlinear
+  region instead of settling into static DC flow.
 - The draw reed has a small rest opening and stronger displacement-to-gap scale
   than the earlier baseline. This is a physical reed-slot modulation tuning:
   the nonlinearity comes from Bernoulli flow through a changing aperture.
@@ -64,7 +69,22 @@ Approximations:
   releases with a raised-cosine release over `release_s`. This pressure is used
   inside the ODE before computing `F_b`, `DeltaP_b`, and `Q_b`; it is not a
   post-render audio fade.
-- The default Milestone 3D breath controls are `pre_delay_s = 0.05`,
+- Milestone 4 uses that same signed mouth-pressure source for both directions.
+  Positive `mouth_pressure_pa` means blow pressure applied from the mouth side.
+  Negative `mouth_pressure_pa` means draw suction at the mouth side.
+  `DeltaP_b = p_m - p_c` is used for the blow-side force and flow, and
+  `DeltaP_d = p_c - p_out` is used for the draw-side force and flow.
+- The draw preset is the previous best-sounding Milestone 3D setup:
+  `mouth_pressure_pa = -900 Pa`, a small draw-reed rest opening, strong
+  draw-reed gap modulation, and output weighted toward tract pressure plus
+  draw-side flow.
+- The blow preset reverses the pressure direction with
+  `mouth_pressure_pa = +600 Pa`. It uses a blow-reed-dominant parameter set:
+  higher blow-reed Q than the passive draw reed, positive-pressure forcing on
+  the blow reed, an active blow gap that reaches near closure during
+  oscillation, and output weighted toward blow-side flow plus a small
+  tract-pressure component.
+- The default draw breath controls are `pre_delay_s = 0.05`,
   `attack_s = 0.35`, `release_s = 0.20`, `release_start_s = 2.30`,
   `mouth_pressure_pa = -900`, and `breath_noise_amount = 0`.
 - Audio normalization is global peak scaling only. The renderer no longer
@@ -81,6 +101,8 @@ Approximations:
   content substantially over the Milestone 3A baseline, but the spectral
   centroid remains below 2x f0; forcing that target harder caused less useful
   parameter choices than accepting the stable reed-closure result.
+- `python run.py --mode both` renders draw and blow outputs and writes
+  `outputs/comparison_report.md` plus `outputs/comparison_diagnostics.png`.
 
 ## Current Acoustic Observations
 
@@ -93,7 +115,7 @@ controllable pressure attack rather than more output processing.
 
 ## Current Diagnostic Metrics
 
-Latest default metrics from `outputs/draw_note_report.md` after Milestone 3D:
+Latest draw metrics from `outputs/draw_note_report.md` after Milestone 4:
 
 - peak audio: `0.850000`
 - RMS audio: `0.373684`
@@ -116,7 +138,34 @@ Latest default metrics from `outputs/draw_note_report.md` after Milestone 3D:
 - draw reed opening near closed: `48.58%`
 - chamber pressure feedback nonzero: `yes`
 - reed participation: `both reeds participate`
+- dominant reed estimate: `draw reed`
 - mouth pressure min/max: `-900.000 / -0.000 Pa`
+- breath envelope min/max: `0.000 / 1.000`
+
+Latest blow metrics from `outputs/blow_note_report.md` after Milestone 4:
+
+- peak audio: `0.850000`
+- RMS audio: `0.382622`
+- RMS first 100 ms: `0.002765`
+- RMS sustain region 0.7-1.2 s: `0.416823`
+- attack ratio first/sustain: `0.006633`
+- estimated fundamental: `398.00 Hz`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.082648`
+- spectral centroid: `439.17 Hz`
+- spectral centroid / f0: `1.10`
+- mostly sinusoidal: `no`
+- RMS `x_b`: `3.697034001e-05 m`
+- RMS `x_d`: `1.111069244e-05 m`
+- RMS `p_c`: `4.056957853e+02 Pa`
+- RMS `p_t`: `6.075870920e+02 Pa`
+- RMS `Q_b`: `1.746924386e-06 m^3/s`
+- RMS `Q_d`: `1.130973124e-06 m^3/s`
+- blow reed opening near closed: `49.69%`
+- draw reed opening near closed: `0.00%`
+- chamber pressure feedback nonzero: `yes`
+- reed participation: `both reeds participate`
+- dominant reed estimate: `blow reed`
+- mouth pressure min/max: `0.000 / 600.000 Pa`
 - breath envelope min/max: `0.000 / 1.000`
 
 Interpretation:
@@ -134,6 +183,9 @@ Interpretation:
   is audible and visible in diagnostics.
 - Nonzero `p_c`, `p_t`, `Q_b`, and `Q_d` RMS values show that the chamber,
   vocal tract, and flows are participating in the coupled model.
+- The blow preset is stable, non-silent, pressure-sign-correct, and
+  blow-reed-dominant. It now shows sustained AC motion and blow-reed near
+  closure instead of a static flow plateau.
 
 ## Current Strengths And Weaknesses
 
@@ -144,12 +196,15 @@ Strengths:
 - stronger harmonic content and reed character after Milestone 3B
 - physically coupled chamber pressure feedback
 - both reeds participate in the current draw-note render
+- explicit draw and blow render modes now share the same ODE path
+- diagnostics estimate the dominant reed for each mode
 - no samples, wavetables, fake sawtooth/filter synthesis, or pitch shifting
 
 Weaknesses:
 
 - current brightness remains below the aspirational `2x f0` centroid target
 - blow reed near-closure is not active in the current draw-note preset
+- both draw and blow still remain below the aspirational `2x f0` centroid target
 - breath attack is now controllable, but still needs listening-based tuning for
   the most natural harmonica onset
 

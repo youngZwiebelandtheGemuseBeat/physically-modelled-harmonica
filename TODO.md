@@ -67,11 +67,30 @@
 
 ## Milestone 4: Blow And Draw Presets
 
-- [ ] Add draw-note preset.
-- [ ] Add blow-note preset.
-- [ ] Keep sign convention clean for both directions.
-- [ ] Render `outputs/draw_note.wav`.
-- [ ] Render `outputs/blow_note.wav`.
+- [x] Add draw-note preset.
+- [x] Add blow-note preset.
+- [x] Keep sign convention clean for both directions.
+- [x] Add CLI mode `python run.py --mode draw`.
+- [x] Add CLI mode `python run.py --mode blow`.
+- [x] Add CLI mode `python run.py --mode both`.
+- [x] Render `outputs/draw_note.wav`.
+- [x] Render `outputs/draw_note_trace.csv`.
+- [x] Render `outputs/draw_note_diagnostics.png`.
+- [x] Render `outputs/draw_note_report.md`.
+- [x] Render `outputs/blow_note.wav`.
+- [x] Render `outputs/blow_note_trace.csv`.
+- [x] Render `outputs/blow_note_diagnostics.png`.
+- [x] Render `outputs/blow_note_report.md`.
+- [x] Render `outputs/comparison_report.md`.
+- [x] Render `outputs/comparison_diagnostics.png`.
+- [x] Add tests for draw, blow, and both mode outputs.
+- [x] Add tests that draw and blow audio are not identical.
+- [x] Add tests for the pressure sign convention.
+- [x] Improve the first blow preset so it has sustained reed oscillation.
+- [x] Add a regression test so blow mode cannot pass with only a DC airflow
+      plateau.
+- [ ] Continue tuning draw/blow brightness and tone quality through physical
+      parameters only.
 
 ## Milestone 5: Vocal-Tract Sweep / Bend Demonstration
 

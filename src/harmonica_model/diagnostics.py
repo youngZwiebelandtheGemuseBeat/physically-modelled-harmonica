@@ -119,6 +119,16 @@ def _attack_strength(result: RenderResult) -> float:
     return float(np.max(np.abs(np.diff(onset))) * result.sample_rate_hz / peak)
 
 
+def _dominant_reed_estimate(x_b_rms: float, x_d_rms: float) -> str:
+    if x_b_rms <= 1.0e-7 and x_d_rms <= 1.0e-7:
+        return "neither reed"
+    if x_b_rms > x_d_rms * 1.25:
+        return "blow reed"
+    if x_d_rms > x_b_rms * 1.25:
+        return "draw reed"
+    return "mixed blow/draw"
+
+
 def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
     spectral = _estimate_spectral_metrics(result)
     audio_peak = float(np.max(np.abs(result.audio)))
@@ -181,6 +191,7 @@ def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
         "area_d_closed_percent": area_d_closed,
         "chamber_feedback_nonzero": chamber_feedback_nonzero,
         "reed_participation": reed_participation,
+        "dominant_reed_estimate": _dominant_reed_estimate(x_b_rms, x_d_rms),
         "mostly_sinusoidal": mostly_sinusoidal,
         "stable_non_clipped": stable_non_clipped,
         "attack_strength": _attack_strength(result),
@@ -248,14 +259,15 @@ def write_trace_csv(path: str | Path, result: RenderResult) -> None:
             )
 
 
-def write_diagnostics_plot(path: str | Path, result: RenderResult) -> None:
+def write_diagnostics_plot(path: str | Path, result: RenderResult, mode: str | None = None) -> None:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    mode_name = mode or result.mode
 
     freqs_hz, _, magnitude_db = _spectrum(result.audio, result.sample_rate_hz)
 
     fig, axes = plt.subplots(5, 2, figsize=(14, 13))
-    fig.suptitle("Draw Note Physical Model Diagnostics")
+    fig.suptitle(f"{mode_name.title()} Note Physical Model Diagnostics")
 
     axes[0, 0].plot(result.time_s, result.audio, color="black", linewidth=0.7)
     axes[0, 0].set_ylabel("audio")
@@ -324,14 +336,24 @@ def write_diagnostics_plot(path: str | Path, result: RenderResult) -> None:
     plt.close(fig)
 
 
-def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
+def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | None = None) -> None:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     metrics = diagnostic_metrics(result)
+    mode_name = mode or result.mode
+    expected_reed = "draw reed" if mode_name == "draw" else "blow reed"
 
     lines = [
-        "# Draw Note Diagnostic Report",
+        f"# {mode_name.title()} Note Diagnostic Report",
+        "",
+        "## Sign Convention",
+        "",
+        "- Positive mouth pressure means the player blows into the mouth side.",
+        "- Negative mouth pressure means draw suction at the mouth side.",
+        "- `DeltaP_b = p_m - p_c` for the blow-side flow and blow-reed force.",
+        "- `DeltaP_d = p_c - p_out` for the draw-side flow and draw-reed force.",
+        f"- This {mode_name} preset is expected to be dominated by the {expected_reed}.",
         "",
         "## Audio Metrics",
         "",
@@ -359,6 +381,7 @@ def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
         f"- Draw reed opening near closed: {metrics['area_d_closed_percent']:.2f}%",
         f"- Chamber pressure feedback nonzero: {'yes' if metrics['chamber_feedback_nonzero'] else 'no'}",
         f"- Reed participation: {metrics['reed_participation']}",
+        f"- Dominant reed estimate: {metrics['dominant_reed_estimate']}",
         f"- Mouth pressure min/max: {float(np.min(result.p_m)):.3f} / {float(np.max(result.p_m)):.3f} Pa",
         f"- Breath envelope min/max: {float(np.min(result.breath_envelope)):.3f} / {float(np.max(result.breath_envelope)):.3f}",
         "",
@@ -370,6 +393,13 @@ def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
         f"- release_start: {result.params.release_start_s:.3f} s",
         f"- sustain_pressure: {result.params.mouth_pressure_pa:.3f} Pa",
         f"- breath_noise_amount: {result.params.breath_noise_amount:.3f}",
+        f"- render_mode: {mode_name}",
+        "",
+        "## Milestone 4 Targets",
+        "",
+        "- Target render: same coupled model with mode-specific pressure sign and preset.",
+        f"- Expected dominant reed: {expected_reed}.",
+        f"- Estimated dominant reed: {metrics['dominant_reed_estimate']}.",
         "",
         "## Milestone 3D Targets",
         "",
@@ -415,4 +445,146 @@ def write_diagnostic_report(path: str | Path, result: RenderResult) -> None:
         "",
     ]
 
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_comparison_diagnostics_plot(
+    path: str | Path,
+    draw_result: RenderResult,
+    blow_result: RenderResult,
+) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    draw_freqs, _, draw_db = _spectrum(draw_result.audio, draw_result.sample_rate_hz)
+    blow_freqs, _, blow_db = _spectrum(blow_result.audio, blow_result.sample_rate_hz)
+
+    fig, axes = plt.subplots(4, 2, figsize=(14, 11))
+    fig.suptitle("Draw vs Blow Physical Model Comparison")
+
+    axes[0, 0].plot(draw_result.time_s, draw_result.audio, label="draw", linewidth=0.7)
+    axes[0, 0].plot(blow_result.time_s, blow_result.audio, label="blow", linewidth=0.7, alpha=0.75)
+    axes[0, 0].set_title("Audio waveforms")
+    axes[0, 0].legend(loc="upper right")
+
+    draw_mask = (draw_freqs > 0.0) & (draw_freqs <= 5000.0)
+    blow_mask = (blow_freqs > 0.0) & (blow_freqs <= 5000.0)
+    axes[0, 1].plot(draw_freqs[draw_mask], draw_db[draw_mask], label="draw", linewidth=0.7)
+    axes[0, 1].plot(blow_freqs[blow_mask], blow_db[blow_mask], label="blow", linewidth=0.7, alpha=0.75)
+    axes[0, 1].set_title("Rendered WAV spectra")
+    axes[0, 1].set_xlabel("frequency Hz")
+    axes[0, 1].legend(loc="upper right")
+
+    axes[1, 0].plot(draw_result.time_s, draw_result.p_m, label="draw p_m", linewidth=0.8)
+    axes[1, 0].plot(blow_result.time_s, blow_result.p_m, label="blow p_m", linewidth=0.8)
+    axes[1, 0].set_title("Mouth pressure sign")
+    axes[1, 0].set_ylabel("Pa")
+    axes[1, 0].legend(loc="upper right")
+
+    axes[1, 1].plot(draw_result.time_s, draw_result.p_c, label="draw p_c", linewidth=0.8)
+    axes[1, 1].plot(blow_result.time_s, blow_result.p_c, label="blow p_c", linewidth=0.8)
+    axes[1, 1].set_title("Chamber pressure")
+    axes[1, 1].set_ylabel("Pa")
+    axes[1, 1].legend(loc="upper right")
+
+    axes[2, 0].plot(draw_result.time_s, draw_result.x_b * 1.0e6, label="draw x_b", linewidth=0.8)
+    axes[2, 0].plot(draw_result.time_s, draw_result.x_d * 1.0e6, label="draw x_d", linewidth=0.8)
+    axes[2, 0].set_title("Draw reed displacements")
+    axes[2, 0].set_ylabel("um")
+    axes[2, 0].legend(loc="upper right")
+
+    axes[2, 1].plot(blow_result.time_s, blow_result.x_b * 1.0e6, label="blow x_b", linewidth=0.8)
+    axes[2, 1].plot(blow_result.time_s, blow_result.x_d * 1.0e6, label="blow x_d", linewidth=0.8)
+    axes[2, 1].set_title("Blow reed displacements")
+    axes[2, 1].set_ylabel("um")
+    axes[2, 1].legend(loc="upper right")
+
+    axes[3, 0].plot(draw_result.time_s, draw_result.q_b * 1.0e6, label="draw Q_b", linewidth=0.8)
+    axes[3, 0].plot(draw_result.time_s, draw_result.q_d * 1.0e6, label="draw Q_d", linewidth=0.8)
+    axes[3, 0].set_title("Draw Bernoulli flows")
+    axes[3, 0].set_xlabel("time s")
+    axes[3, 0].set_ylabel("ml/s")
+    axes[3, 0].legend(loc="upper right")
+
+    axes[3, 1].plot(blow_result.time_s, blow_result.q_b * 1.0e6, label="blow Q_b", linewidth=0.8)
+    axes[3, 1].plot(blow_result.time_s, blow_result.q_d * 1.0e6, label="blow Q_d", linewidth=0.8)
+    axes[3, 1].set_title("Blow Bernoulli flows")
+    axes[3, 1].set_xlabel("time s")
+    axes[3, 1].set_ylabel("ml/s")
+    axes[3, 1].legend(loc="upper right")
+
+    for axis in axes.flat:
+        axis.grid(True, alpha=0.25)
+
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+    fig.savefig(output_path, dpi=140)
+    plt.close(fig)
+
+
+def write_comparison_report(
+    path: str | Path,
+    draw_result: RenderResult,
+    blow_result: RenderResult,
+) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    draw_metrics = diagnostic_metrics(draw_result)
+    blow_metrics = diagnostic_metrics(blow_result)
+
+    def metric_line(label: str, key: str, fmt: str = ".6f") -> str:
+        draw_value = draw_metrics[key]
+        blow_value = blow_metrics[key]
+        if isinstance(draw_value, bool):
+            draw_text = "yes" if draw_value else "no"
+            blow_text = "yes" if blow_value else "no"
+        elif isinstance(draw_value, str):
+            draw_text = str(draw_value)
+            blow_text = str(blow_value)
+        else:
+            draw_text = f"{float(draw_value):{fmt}}"
+            blow_text = f"{float(blow_value):{fmt}}"
+        return f"| {label} | {draw_text} | {blow_text} |"
+
+    same_audio = bool(
+        draw_result.audio.shape == blow_result.audio.shape
+        and np.allclose(draw_result.audio, blow_result.audio)
+    )
+
+    lines = [
+        "# Draw vs Blow Comparison Report",
+        "",
+        "## Sign Convention",
+        "",
+        "- Draw uses negative `p_m`: mouth suction relative to the chamber/outside.",
+        "- Blow uses positive `p_m`: mouth pressure into the chamber.",
+        "- `DeltaP_b = p_m - p_c`; positive values drive blow-side flow toward the chamber.",
+        "- `DeltaP_d = p_c - p_out`; positive values drive draw-side/outlet flow away from the chamber.",
+        "- The draw preset should emphasize draw-reed motion; the blow preset should emphasize blow-reed motion.",
+        "",
+        "## Metrics",
+        "",
+        "| Metric | Draw | Blow |",
+        "| --- | ---: | ---: |",
+        metric_line("Fundamental estimate Hz", "fundamental_hz", ".2f"),
+        metric_line("Harmonic energy ratio", "harmonic_energy_ratio"),
+        metric_line("Spectral centroid Hz", "spectral_centroid_hz", ".2f"),
+        metric_line("Mostly sinusoidal", "mostly_sinusoidal"),
+        metric_line("RMS x_b m", "x_b_rms", ".9e"),
+        metric_line("RMS x_d m", "x_d_rms", ".9e"),
+        metric_line("RMS p_c Pa", "p_c_rms", ".9e"),
+        metric_line("RMS p_t Pa", "p_t_rms", ".9e"),
+        metric_line("RMS Q_b m^3/s", "q_b_rms", ".9e"),
+        metric_line("RMS Q_d m^3/s", "q_d_rms", ".9e"),
+        metric_line("Blow opening near closed %", "area_b_closed_percent", ".2f"),
+        metric_line("Draw opening near closed %", "area_d_closed_percent", ".2f"),
+        metric_line("Attack ratio", "attack_ratio"),
+        metric_line("Dominant reed estimate", "dominant_reed_estimate"),
+        "",
+        "## Output Check",
+        "",
+        f"- Draw and blow audio arrays identical: {'yes' if same_audio else 'no'}",
+        f"- Draw mouth pressure min/max: {float(np.min(draw_result.p_m)):.3f} / {float(np.max(draw_result.p_m)):.3f} Pa",
+        f"- Blow mouth pressure min/max: {float(np.min(blow_result.p_m)):.3f} / {float(np.max(blow_result.p_m)):.3f} Pa",
+        "",
+    ]
     output_path.write_text("\n".join(lines), encoding="utf-8")

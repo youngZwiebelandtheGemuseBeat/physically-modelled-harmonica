@@ -22,6 +22,7 @@ from .params import DEFAULT_PARAMS, ModelParams, RenderConfig
 
 @dataclass(frozen=True)
 class RenderResult:
+    mode: str
     sample_rate_hz: int
     time_s: np.ndarray
     params: ModelParams
@@ -76,7 +77,8 @@ def _normalize_audio(signal: np.ndarray, peak: float = 0.85) -> np.ndarray:
     return values * (peak / max_abs)
 
 
-def render_draw_note(
+def render_note(
+    mode: str,
     params: ModelParams = DEFAULT_PARAMS,
     config: RenderConfig = RenderConfig(),
 ) -> RenderResult:
@@ -109,6 +111,7 @@ def render_draw_note(
     raw_audio = np.array([value.audio_pressure for value in derived], dtype=float)
 
     return RenderResult(
+        mode=mode,
         sample_rate_hz=config.sample_rate_hz,
         time_s=time_s,
         params=params,
@@ -126,3 +129,10 @@ def render_draw_note(
         force_d=np.array([value.force_d for value in derived], dtype=float),
         dp_c=np.array([value.dp_c for value in derived], dtype=float),
     )
+
+
+def render_draw_note(
+    params: ModelParams = DEFAULT_PARAMS,
+    config: RenderConfig = RenderConfig(),
+) -> RenderResult:
+    return render_note("draw", params, config)

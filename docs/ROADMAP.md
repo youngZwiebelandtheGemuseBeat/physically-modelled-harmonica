@@ -26,7 +26,7 @@ chamber-pressure feedback.
 
 ## Milestone 3: Self-Exciting Harmonica-Like Model
 
-Status: In progress. Milestone 3D is the current baseline.
+Status: Done. Milestone 3D remains the draw-note acoustic baseline.
 
 Make the model self-exciting and harmonica-like.
 
@@ -146,9 +146,47 @@ character is preserved.
 
 ## Milestone 4: Blow And Draw Presets
 
+Status: Done. First stable implementation is available.
+
 Add one draw note and one blow note. Use the sign convention cleanly.
 
-Acceptance: `python run.py` can render `draw_note.wav` and `blow_note.wav`.
+Commands:
+
+```text
+python run.py --mode draw
+python run.py --mode blow
+python run.py --mode both
+```
+
+Sign convention:
+
+- positive `p_m` means blow pressure from the mouth side
+- negative `p_m` means draw suction from the mouth side
+- `DeltaP_b = p_m - p_c`
+- `DeltaP_d = p_c - p_out`
+- the draw preset should be draw-reed dominant
+- the blow preset should be blow-reed dominant
+
+Outputs:
+
+- `outputs/draw_note.wav`
+- `outputs/draw_note_trace.csv`
+- `outputs/draw_note_diagnostics.png`
+- `outputs/draw_note_report.md`
+- `outputs/blow_note.wav`
+- `outputs/blow_note_trace.csv`
+- `outputs/blow_note_diagnostics.png`
+- `outputs/blow_note_report.md`
+- `outputs/comparison_report.md`
+- `outputs/comparison_diagnostics.png`
+
+Current result:
+
+- draw remains the best-sounding harmonica-like preset
+- blow is stable, non-silent, pressure-sign-correct, and blow-reed dominant
+- draw and blow outputs are not identical
+- blow now has sustained reed oscillation and blow-reed near closure
+- both modes can still use further tone-quality and brightness tuning
 
 ## Milestone 5: Vocal-Tract Sweep / Bend Demonstration
 

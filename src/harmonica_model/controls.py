@@ -42,9 +42,15 @@ def _breath_noise_multiplier(t_s: float, amount: float) -> float:
     return max(0.0, 1.0 + amount * noise)
 
 
-def draw_mouth_pressure(t_s: float, params: ModelParams) -> float:
-    """Signed mouth pressure source for one offline draw note."""
+def mouth_pressure_source(t_s: float, params: ModelParams) -> float:
+    """Signed mouth pressure source used before the physical equations."""
 
     envelope = breath_envelope(t_s, params)
     noise_multiplier = _breath_noise_multiplier(t_s, params.breath_noise_amount)
     return params.mouth_pressure_pa * envelope * noise_multiplier
+
+
+def draw_mouth_pressure(t_s: float, params: ModelParams) -> float:
+    """Backward-compatible alias for the signed mouth-pressure source."""
+
+    return mouth_pressure_source(t_s, params)

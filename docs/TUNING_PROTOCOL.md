@@ -30,12 +30,12 @@ without adding a fake synthesis layer.
 ## Procedure
 
 1. Start from a passing test suite and a stable non-silent render.
-2. Render the same note after each parameter change.
-3. Inspect `outputs/draw_note_trace.csv` for reed displacement, reed velocity,
+2. Render the affected mode after each parameter change.
+3. Inspect `outputs/draw_note_trace.csv` or `outputs/blow_note_trace.csv` for reed displacement, reed velocity,
    chamber pressure, tract pressure, pressure drops, openings, and flows.
-4. Inspect `outputs/draw_note_diagnostics.png` for instability, clipping, flow
+4. Inspect the matching diagnostics PNG for instability, clipping, flow
    sign errors, and lack of nonlinear behaviour.
-5. Inspect `outputs/draw_note_report.md` for objective metrics: fundamental,
+5. Inspect the matching report for objective metrics: fundamental,
    harmonic energy ratio, spectral centroid, reed participation, opening
    closure percentage, and chamber feedback.
 6. Change one physical parameter group at a time.
@@ -120,6 +120,43 @@ time.
     `pytest` passes, the report says chamber feedback is nonzero, at least one
     reed closure percentage is meaningful, and the sound is audibly less
     sinusoidal for physical reasons.
+
+## Milestone 4 Draw/Blow Protocol
+
+Run:
+
+```text
+python run.py --mode draw
+python run.py --mode blow
+python run.py --mode both
+```
+
+Pressure convention:
+
+- positive `p_m` means blow pressure from the mouth side
+- negative `p_m` means draw suction from the mouth side
+- `DeltaP_b = p_m - p_c`
+- `DeltaP_d = p_c - p_out`
+
+Draw tuning starts from the Milestone 3D baseline. It should preserve the
+draw-reed near-closure behavior, the `444 Hz` fundamental estimate, the
+non-sinusoidal harmonic ratio, and the slow physical breath attack.
+
+Blow tuning starts from the first Milestone 4 blow preset. It should preserve
+positive mouth pressure and blow-reed dominance. The next useful changes are
+physical only: blow-reed rest opening, displacement-to-gap scale, pressure
+area, Q/damping, chamber volume, vocal-tract loading, and the physical output
+mix from pressure/flow states. Do not improve the blow note by adding a fake
+oscillator, pitch shifter, sample, wavetable, or subtractive synth layer.
+
+Use `outputs/comparison_report.md` and
+`outputs/comparison_diagnostics.png` after `--mode both` to confirm:
+
+- draw and blow pressures have opposite signs
+- draw and blow outputs are not identical
+- the draw report estimates draw-reed dominance
+- the blow report estimates blow-reed dominance
+- both modes remain stable and non-silent
 
 ## Milestone 3 Acceptance Checks
 
