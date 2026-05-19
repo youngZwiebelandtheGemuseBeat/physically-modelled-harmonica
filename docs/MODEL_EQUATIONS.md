@@ -65,9 +65,18 @@ Draw-side flow:
 Q_d = C_d A_d(x_d) sgn(p_c - p_out) sqrt(2 |p_c - p_out| / rho)
 ```
 
-`A_b(x_b)` and `A_d(x_d)` are physical reed opening functions. They may include
-rest openings and closure clipping, but they must not become fake synthesis
-sources.
+`A_b(x_b)` and `A_d(x_d)` are physical reed opening functions. Milestone 3B uses
+the explicit form:
+
+```text
+A_b = max(A_min, W_b max(0, h_b0 + sigma_b x_b))
+A_d = max(A_min, W_d max(0, h_d0 + sigma_d x_d))
+```
+
+The sign of `sigma_i` defines whether positive displacement opens or closes the
+slot. Rest openings, closure clipping, and documented closure damping are
+allowed as physical reed-slot approximations, but they must not become fake
+synthesis sources.
 
 ## Chamber Pressure
 

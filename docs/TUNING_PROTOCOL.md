@@ -32,14 +32,94 @@ without adding a fake synthesis layer.
 1. Start from a passing test suite and a stable non-silent render.
 2. Render the same note after each parameter change.
 3. Inspect `outputs/draw_note_trace.csv` for reed displacement, reed velocity,
-   chamber pressure, tract pressure, and flows.
+   chamber pressure, tract pressure, pressure drops, openings, and flows.
 4. Inspect `outputs/draw_note_diagnostics.png` for instability, clipping, flow
    sign errors, and lack of nonlinear behaviour.
-5. Change one physical parameter group at a time.
-6. Prefer stability over brightness when a parameter creates runaway pressure or
+5. Inspect `outputs/draw_note_report.md` for objective metrics: fundamental,
+   harmonic energy ratio, spectral centroid, reed participation, opening
+   closure percentage, and chamber feedback.
+6. Change one physical parameter group at a time.
+7. Prefer stability over brightness when a parameter creates runaway pressure or
    solver failure.
-7. Commit or record parameter sets only when they are reproducible through
+8. Commit or record parameter sets only when they are reproducible through
    `python run.py`.
+
+## Milestone 3A Diagnostic Baseline
+
+Before tuning for brightness or recognizability, confirm that the physical
+states are doing useful work:
+
+- `p_c` RMS should be clearly nonzero; if it is near zero, chamber compliance or
+  flow magnitudes are too weak to feed back into the reeds.
+- Both `DeltaP_b` and `DeltaP_d` should vary over the note; if one is nearly
+  constant, that side is acting like a static leak rather than a coupled reed.
+- At least one reed opening should approach closure for part of the cycle; if
+  `A_b` and `A_d` never move near closed, the Bernoulli nonlinearity will stay
+  too gentle and the sound will remain sine-like.
+- `Q_b` and `Q_d` should not be simple scaled copies of one reed displacement;
+  visible flattening, clipping, or asymmetric flow peaks indicate useful
+  nonlinear aero-acoustic behavior.
+- The harmonic energy ratio should rise as physical nonlinearities strengthen.
+  A very low ratio with centroid close to the fundamental means the output is
+  still mostly sinusoidal.
+
+## Concrete Parameter-Tuning Plan
+
+Work in short branches or recorded parameter sets and change only one group at a
+time.
+
+1. Establish the baseline report.
+   Run `python run.py`, save the report metrics, and listen only after checking
+   that the render is stable and non-silent.
+
+2. Tune reed rest openings and closure thresholds.
+   Reduce the active reed rest opening in small steps so `A_d` approaches
+   closure during oscillation, then adjust the inactive reed so it participates
+   without becoming a dominant static leak. Target visible area modulation and
+   a higher harmonic energy ratio without solver failure.
+
+3. Tune effective pressure areas and slot widths.
+   Increase reed pressure areas only enough to strengthen reed motion. Use slot
+   widths and rest gaps to control flow amplitude separately from mechanical
+   forcing. Reject settings where chamber pressure becomes a one-way pressure
+   ramp or either flow collapses to zero for the whole note.
+
+4. Tune reed damping / Q.
+   Raise Q to make self-excitation easier, but back off if displacement grows
+   without bounded closure behavior. The desired result is a reed-like attack
+   and sustained oscillation, not an undamped free oscillator.
+
+5. Tune discharge coefficients.
+   Adjust `C_b` and `C_d` to strengthen Bernoulli coupling after the openings
+   are moving. Use the report to confirm that flow RMS and harmonic energy rise
+   together.
+
+6. Tune chamber volume and pressure scaling.
+   Smaller effective chamber volume increases pressure feedback. Move in small
+   factors and watch `p_c` RMS, `p_c'`, and solver stability. If `p_c` dominates
+   but reed motion shrinks, the acoustic compliance is too stiff for the current
+   reed parameters.
+
+7. Tune the mouth-pressure envelope.
+   Increase draw pressure or shorten attack only after the passive parameters
+   are close. The onset should excite the reed system, not simply fade in a
+   linear oscillator.
+
+8. Tune vocal-tract loading.
+   Move tract frequency near the reed frequency and adjust tract Q/impedance to
+   reinforce pressure-flow feedback. Do not use the tract as a separate tone
+   source; it must remain driven by `Q_b - Q_d`.
+
+9. Revisit the physical output mix.
+   Choose a weighted combination of `p_c`, `p_t`, `Q_b`, and `Q_d` only after
+   the internal traces show nonlinear behavior. Keep the report honest: if the
+   internal states are sine-like, output weighting should not be used to disguise
+   that.
+
+10. Accept a parameter set only when all required outputs are generated,
+    `pytest` passes, the report says chamber feedback is nonzero, at least one
+    reed closure percentage is meaningful, and the sound is audibly less
+    sinusoidal for physical reasons.
 
 ## Milestone 3 Acceptance Checks
 
@@ -48,3 +128,28 @@ without adding a fake synthesis layer.
 - The trace shows pressure-flow feedback instead of a one-way oscillator.
 - The spectrum or waveform shows audible harmonic content.
 - The implementation still maps directly to the proposal equations.
+
+## Milestone 3B Sweep
+
+Run:
+
+```text
+python run.py --sweep
+```
+
+The command renders candidates into `outputs/sweep/`, with one WAV and one
+Markdown report per candidate plus `summary.md`. The ranking score favors:
+
+- stable, non-clipped, non-silent output
+- higher harmonic energy ratio
+- spectral centroid above the fundamental
+- stronger attack
+- one reed near closed for part of the note, but not always closed
+
+The target for the next iteration is:
+
+- harmonic energy ratio above `0.05`
+- spectral centroid near `2x f0` if it can be reached without instability
+- `Mostly sinusoidal: no`
+- one reed near-closed between `5%` and `60%`
+- stable, non-silent output

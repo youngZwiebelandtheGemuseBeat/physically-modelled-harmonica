@@ -27,6 +27,8 @@ class RenderResult:
     state: np.ndarray
     audio: np.ndarray
     p_m: np.ndarray
+    delta_p_b: np.ndarray
+    delta_p_d: np.ndarray
     area_b: np.ndarray
     area_d: np.ndarray
     q_b: np.ndarray
@@ -114,6 +116,8 @@ def render_draw_note(
         state=state,
         audio=_normalize_audio(raw_audio),
         p_m=np.array([value.p_m for value in derived], dtype=float),
+        delta_p_b=np.array([value.delta_p_b for value in derived], dtype=float),
+        delta_p_d=np.array([value.delta_p_d for value in derived], dtype=float),
         area_b=np.array([value.area_b for value in derived], dtype=float),
         area_d=np.array([value.area_d for value in derived], dtype=float),
         q_b=np.array([value.q_b for value in derived], dtype=float),

@@ -16,6 +16,9 @@ class ReedParams:
     rest_opening_m: float
     closing_displacement_m: float
     displacement_to_gap: float
+    min_opening_area_m2: float
+    closure_damping_gap_m: float
+    closure_damping_kg_s: float
     discharge_coefficient: float
 
 
@@ -38,6 +41,9 @@ class ModelParams:
     release_start_s: float
     acoustic_flow_gain_pa_s_m3: float
     pressure_output_gain: float
+    chamber_pressure_output_gain: float
+    draw_flow_output_gain_pa_s_m3: float
+    blow_flow_output_gain_pa_s_m3: float
 
     @property
     def vocal_tract_omega_rad_s(self) -> float:
@@ -65,6 +71,9 @@ def _reed_from_frequency(
     rest_opening_m: float,
     closing_displacement_m: float,
     displacement_to_gap: float,
+    min_opening_area_m2: float,
+    closure_damping_gap_m: float,
+    closure_damping_kg_s: float,
     discharge_coefficient: float,
 ) -> ReedParams:
     omega = 2.0 * pi * frequency_hz
@@ -79,6 +88,9 @@ def _reed_from_frequency(
         rest_opening_m=rest_opening_m,
         closing_displacement_m=closing_displacement_m,
         displacement_to_gap=displacement_to_gap,
+        min_opening_area_m2=min_opening_area_m2,
+        closure_damping_gap_m=closure_damping_gap_m,
+        closure_damping_kg_s=closure_damping_kg_s,
         discharge_coefficient=discharge_coefficient,
     )
 
@@ -86,7 +98,7 @@ def _reed_from_frequency(
 DEFAULT_PARAMS = ModelParams(
     rho_air_kg_m3=1.204,
     speed_of_sound_m_s=343.0,
-    chamber_volume_m3=1.2e-6,
+    chamber_volume_m3=8.0e-7,
     p_out_pa=0.0,
     blow_reed=_reed_from_frequency(
         frequency_hz=392.0,
@@ -95,28 +107,37 @@ DEFAULT_PARAMS = ModelParams(
         pressure_area_m2=1.3e-6,
         slot_width_m=2.2e-3,
         rest_opening_m=30.0e-6,
-        closing_displacement_m=-8.0e-6,
-        displacement_to_gap=0.1,
+        closing_displacement_m=-150.0e-6,
+        displacement_to_gap=0.2,
+        min_opening_area_m2=0.0,
+        closure_damping_gap_m=8.0e-6,
+        closure_damping_kg_s=4.0e-4,
         discharge_coefficient=0.62,
     ),
     draw_reed=_reed_from_frequency(
         frequency_hz=440.0,
         mass_kg=8.5e-6,
-        quality_factor=30.0,
+        quality_factor=42.0,
         pressure_area_m2=1.5e-6,
         slot_width_m=2.3e-3,
-        rest_opening_m=8.0e-6,
-        closing_displacement_m=8.0e-6,
-        displacement_to_gap=-1.0,
+        rest_opening_m=2.0e-6,
+        closing_displacement_m=0.6666666666666666e-6,
+        displacement_to_gap=-3.0,
+        min_opening_area_m2=0.0,
+        closure_damping_gap_m=6.0e-6,
+        closure_damping_kg_s=1.8e-3,
         discharge_coefficient=0.68,
     ),
-    vocal_tract_frequency_hz=520.0,
-    vocal_tract_q=4.0,
-    vocal_tract_impedance_pa_s_m3=1.8e8,
-    mouth_pressure_pa=-780.0,
-    attack_s=0.055,
+    vocal_tract_frequency_hz=650.0,
+    vocal_tract_q=5.0,
+    vocal_tract_impedance_pa_s_m3=2.2e8,
+    mouth_pressure_pa=-900.0,
+    attack_s=0.04,
     release_s=0.12,
     release_start_s=2.10,
-    acoustic_flow_gain_pa_s_m3=2.4e7,
-    pressure_output_gain=0.08,
+    acoustic_flow_gain_pa_s_m3=0.0,
+    pressure_output_gain=0.01,
+    chamber_pressure_output_gain=0.0,
+    draw_flow_output_gain_pa_s_m3=1.0e7,
+    blow_flow_output_gain_pa_s_m3=0.0,
 )
