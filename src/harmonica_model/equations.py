@@ -1,3 +1,20 @@
+"""Core physical equations for one harmonica channel.
+
+This file is the main "physics engine" of the project.  The ODE solver calls
+`state_derivatives()` many times per rendered note.  At each call this module
+computes:
+
+1. the signed mouth pressure supplied by the player,
+2. the current reed openings,
+3. Bernoulli airflow through the blow and draw reed slots,
+4. pressure forces on each reed,
+5. chamber pressure feedback, and
+6. the reduced vocal-tract acoustic load.
+
+The state vector order is fixed by the constants below:
+`[x_b, v_b, x_d, v_d, p_c, p_t, v_t]`.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +26,8 @@ from .controls import breath_envelope, mouth_pressure_source
 from .params import ModelParams, ReedParams
 
 
+# Named indices make the seven-element ODE state readable everywhere else in
+# the code.  `x` means displacement, `v` means velocity, `p` means pressure.
 X_B = 0
 V_B = 1
 X_D = 2
@@ -21,6 +40,13 @@ STATE_SIZE = 7
 
 @dataclass(frozen=True)
 class DerivedValues:
+    """Human-readable physical quantities derived from one ODE state.
+
+    The solver state stores only the minimum variables needed by the ODE.  This
+    object recomputes secondary values such as flow, force, and opening area so
+    reports and CSV traces can show what the physics did at each time sample.
+    """
+
     p_m: float
     breath_envelope: float
     delta_p_b: float
@@ -37,7 +63,13 @@ class DerivedValues:
 
 
 def reed_opening_area(displacement_m: float, reed: ReedParams) -> float:
-    """A_i = max(A_min, W_i * max(0, h_i0 + sigma_i x_i))."""
+    """Convert reed displacement into effective slot opening area.
+
+    Implements the project equation
+    `A_i = max(A_min, W_i * max(0, h_i0 + sigma_i x_i))`.
+    A closed geometric gap contributes zero area unless `A_min` intentionally
+    keeps a tiny leakage opening.
+    """
 
     gap_m = reed_gap(displacement_m, reed)
     geometric_area_m2 = reed.slot_width_m * max(0.0, gap_m)
@@ -45,13 +77,21 @@ def reed_opening_area(displacement_m: float, reed: ReedParams) -> float:
 
 
 def reed_gap(displacement_m: float, reed: ReedParams) -> float:
-    """Physical reed-slot gap h_i0 + sigma_i x_i."""
+    """Return physical reed-slot gap `h_i0 + sigma_i x_i`.
+
+    `displacement_to_gap` is the sign convention: positive displacement can
+    either open or close the reed depending on the chosen blow/draw preset.
+    """
 
     return reed.rest_opening_m + reed.displacement_to_gap * displacement_m
 
 
 def reed_closure_damping(gap_m: float, reed: ReedParams) -> float:
-    """Extra damping used only as a smooth reed-slot closure approximation."""
+    """Return extra damping when a reed approaches the slot.
+
+    This is a physical loss approximation for near-closure/contact.  It is
+    applied inside the reed ODE, not as an audio effect after the fact.
+    """
 
     if reed.closure_damping_gap_m <= 0.0 or reed.closure_damping_kg_s <= 0.0:
         return 0.0
@@ -61,7 +101,12 @@ def reed_closure_damping(gap_m: float, reed: ReedParams) -> float:
 
 
 def bernoulli_flow(delta_p_pa: float, area_m2: float, params: ModelParams, discharge_coefficient: float) -> float:
-    """C A sgn(delta_p) sqrt(2 |delta_p| / rho)."""
+    """Compute signed Bernoulli volume flow through a reed slot.
+
+    Implements `Q = C A sgn(DeltaP) sqrt(2 |DeltaP| / rho)`.  The sign of the
+    pressure drop decides flow direction; the square root creates the nonlinear
+    pressure-to-flow relation that helps generate harmonics.
+    """
 
     if area_m2 <= 0.0 or delta_p_pa == 0.0:
         return 0.0
@@ -71,19 +116,23 @@ def bernoulli_flow(delta_p_pa: float, area_m2: float, params: ModelParams, disch
 
 
 def blow_reed_force(p_m_pa: float, p_c_pa: float, params: ModelParams) -> float:
-    """F_b = S_b (p_m - p_c)."""
+    """Return pressure force on the blow reed: `F_b = S_b (p_m - p_c)`."""
 
     return params.blow_reed.pressure_area_m2 * (p_m_pa - p_c_pa)
 
 
 def draw_reed_force(p_c_pa: float, params: ModelParams) -> float:
-    """F_d = S_d (p_c - p_out)."""
+    """Return pressure force on the draw reed: `F_d = S_d (p_c - p_out)`."""
 
     return params.draw_reed.pressure_area_m2 * (p_c_pa - params.p_out_pa)
 
 
 def chamber_loss_flow(p_c_pa: float, params: ModelParams) -> float:
-    """Small pressure-proportional acoustic loss flow from the chamber."""
+    """Return small pressure-proportional acoustic loss `Q_loss = G_c p_c`.
+
+    Setting the conductance `G_c` to zero recovers the original proposal
+    chamber equation with no explicit chamber loss.
+    """
 
     return params.chamber_loss_conductance_m3_s_pa * p_c_pa
 
@@ -94,7 +143,9 @@ def chamber_pressure_derivative(
     params: ModelParams,
     p_c_pa: float = 0.0,
 ) -> float:
-    """p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss).
+    """Compute chamber pressure slope.
+
+    Implements `p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)`.
 
     With zero chamber loss this is exactly the proposal equation. The default
     presets use a small pressure-proportional loss so chamber pressure energy
@@ -107,6 +158,15 @@ def chamber_pressure_derivative(
 
 
 def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.ndarray:
+    """Return the seven ODE derivatives at time `t_s`.
+
+    This is the central workflow of the model.  `solve_ivp` repeatedly calls
+    this function to advance the coupled reed, flow, chamber, and vocal-tract
+    state.  The output order matches the state vector order:
+    `[x_b', v_b', x_d', v_d', p_c', p_t', v_t']`.
+    """
+
+    # Unpack the state vector into physical names before doing any equations.
     x_b, v_b, x_d, v_d, p_c, p_t, v_t = state
 
     # This is the player's signed breath pressure before any acoustic state is
@@ -114,6 +174,8 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
     # not faded afterward to fake an attack.
     p_m = mouth_pressure_source(t_s, params)
 
+    # Reed displacement controls the instantaneous geometric opening.  Smaller
+    # opening area reduces flow and can create the nonlinear near-closure regime.
     area_b = reed_opening_area(x_b, params.blow_reed)
     area_d = reed_opening_area(x_d, params.draw_reed)
     gap_b = reed_gap(x_b, params.blow_reed)
@@ -121,6 +183,7 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
     damping_b = params.blow_reed.damping_kg_s + reed_closure_damping(gap_b, params.blow_reed)
     damping_d = params.draw_reed.damping_kg_s + reed_closure_damping(gap_d, params.draw_reed)
 
+    # Pressure forces push the mechanical reed oscillators.
     force_b = blow_reed_force(p_m, p_c, params)
     force_d = draw_reed_force(p_c, params)
 
@@ -143,6 +206,8 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
         params.draw_reed.discharge_coefficient,
     )
 
+    # Reed mechanics: each reed is a damped mass-spring oscillator driven by
+    # pressure force.  `dx` is velocity; `dv` is acceleration.
     dx_b = v_b
     dv_b = (
         force_b
@@ -155,6 +220,9 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
         - damping_d * v_d
         - params.draw_reed.stiffness_n_m * x_d
     ) / params.draw_reed.mass_kg
+
+    # Chamber pressure integrates the imbalance between inflow, outflow, and
+    # the small documented acoustic loss.
     dp_c = chamber_pressure_derivative(q_b, q_d, params, p_c)
 
     omega_t = params.vocal_tract_omega_rad_s
@@ -173,9 +241,20 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
 
 
 def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> DerivedValues:
+    """Recompute report/trace quantities from one solved state.
+
+    The ODE solver only stores the state variables.  This function follows the
+    same equations used during integration so CSV traces and diagnostics can
+    show the pressure drops, flows, forces, opening areas, and output mixture
+    associated with a particular time sample.
+    """
+
     x_b, _, x_d, _, p_c, p_t, _ = state
     p_m = mouth_pressure_source(t_s, params)
     envelope = breath_envelope(t_s, params)
+
+    # Use the same physical calculations as `state_derivatives()` so rendered
+    # traces are an audit of the actual model, not a separate approximation.
     area_b = reed_opening_area(x_b, params.blow_reed)
     area_d = reed_opening_area(x_d, params.draw_reed)
     force_b = blow_reed_force(p_m, p_c, params)
@@ -196,6 +275,9 @@ def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> Derive
     )
     q_loss = chamber_loss_flow(p_c, params)
     dp_c = chamber_pressure_derivative(q_b, q_d, params, p_c)
+
+    # Legacy/reporting pressure mixture.  The final WAV is formed in
+    # `audio.physical_output_signal()`, but this is useful for diagnostics.
     audio_pressure = (
         params.chamber_pressure_output_gain * p_c
         + params.pressure_output_gain * p_t

@@ -1,3 +1,12 @@
+"""Physical constants, reed presets, and numerical solver settings.
+
+This file is the parameter sheet for the model.  It deliberately contains no
+time stepping or signal generation logic; it only names the physical values that
+the equations use.  When defending the project, this is where to point for
+"what values did we assume?" and `equations.py` is where to point for "how are
+those values used?"
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,73 +15,143 @@ from math import pi
 
 @dataclass(frozen=True)
 class ReedParams:
-    """Lumped mass-spring-damper reed parameters."""
+    """All physical constants for one reed and its slot.
 
+    Each reed is represented as one lumped mass-spring-damper oscillator, plus
+    a simple geometric slot-opening law for Bernoulli flow.
+    """
+
+    # Moving reed mass in kilograms.
     mass_kg: float
+    # Viscous/mechanical damping coefficient `r_i` in the reed equation.
     damping_kg_s: float
+    # Spring stiffness `k_i`; together with mass it sets the natural frequency.
     stiffness_n_m: float
+    # Effective area that converts pressure difference into force on the reed.
     pressure_area_m2: float
+    # Slot width used to turn a gap height into an opening area.
     slot_width_m: float
+    # Reed-slot gap when the reed displacement is zero.
     rest_opening_m: float
+    # Displacement where the simple gap law predicts geometric closure.
     closing_displacement_m: float
+    # Sign/scale from reed displacement to slot gap: `gap = h0 + sigma*x`.
     displacement_to_gap: float
+    # Optional minimum opening area; zero means a closed slot has zero flow.
     min_opening_area_m2: float
+    # Gap range over which the near-closure damping approximation is active.
     closure_damping_gap_m: float
+    # Extra damping amount at full near-closure.
     closure_damping_kg_s: float
+    # Bernoulli discharge coefficient accounting for non-ideal slot flow.
     discharge_coefficient: float
 
 
 @dataclass(frozen=True)
 class ModelParams:
-    """Physical and numerical parameters for one harmonica channel."""
+    """Complete parameter set for one rendered harmonica channel.
 
+    These values control the air, chamber, both reeds, breath source, vocal
+    tract load, and output/radiation approximation.  Draw and blow presets use
+    the same fields, but with different signed pressure and reed settings.
+    """
+
+    # Air density used by Bernoulli flow.
     rho_air_kg_m3: float
+    # Speed of sound used by the chamber-compliance pressure equation.
     speed_of_sound_m_s: float
+    # Effective chamber volume; smaller volume gives stronger pressure feedback.
     chamber_volume_m3: float
+    # Outside/reference pressure, kept at 0 Pa gauge pressure.
     p_out_pa: float
+    # Blow-side reed and slot parameters.
     blow_reed: ReedParams
+    # Draw-side reed and slot parameters.
     draw_reed: ReedParams
+    # Center frequency of the reduced vocal-tract acoustic load.
     vocal_tract_frequency_hz: float
+    # Quality factor of the tract resonator; higher means narrower resonance.
     vocal_tract_q: float
+    # Coupling strength from net flow into tract pressure.
     vocal_tract_impedance_pa_s_m3: float
+    # Signed pressure supplied by the player: positive blow, negative draw.
     mouth_pressure_pa: float
+    # Quiet time before the breath envelope starts.
     pre_delay_s: float
+    # Time for the breath pressure to rise smoothly to full strength.
     attack_s: float
+    # Time for the breath pressure to fall smoothly at note end.
     release_s: float
+    # Time at which the pressure release starts.
     release_start_s: float
+    # Optional deterministic mouth-pressure roughness; default is off.
     breath_noise_amount: float
+    # Output gain for net flow when using mixed/flow radiation.
     acoustic_flow_gain_pa_s_m3: float
+    # Output gain for vocal-tract pressure.
     pressure_output_gain: float
+    # Output gain for chamber pressure.
     chamber_pressure_output_gain: float
+    # Output gain for draw-side flow.
     draw_flow_output_gain_pa_s_m3: float
+    # Output gain for blow-side flow.
     blow_flow_output_gain_pa_s_m3: float
+    # Main output choice: pressure, flow, or mixed.
     output_mode: str
+    # Legacy/source-level output selector used when output_mode is not direct.
     output_source: str
+    # Loss inside the chamber ODE: `Q_loss = G_c p_c`.
     chamber_loss_conductance_m3_s_pa: float
+    # Extra leakage used only in the output/radiation layer.
     chamber_leakage_conductance_m3_s_pa: float
+    # Whether to apply the conservative radiation/body filtering stage.
     radiation_enabled: bool
+    # High-pass cutoff for radiation from pressure/flow states.
     radiation_highpass_hz: float
+    # Blend amount for differentiating flow/pressure radiation tendency.
     radiation_differentiation_mix: float
+    # Broad body/cover-plate coloration frequency.
     body_resonance_frequency_hz: float
+    # Quality factor for body coloration; deliberately low-Q.
     body_resonance_q: float
+    # Gain of the body coloration filter mixed into the output.
     body_resonance_gain: float
+    # Output-layer turbulent flow-noise gain; not fed back into the ODE.
     flow_noise_amount: float
+    # Exponent controlling how strongly noise follows simulated flow magnitude.
     flow_noise_power: float
+    # Seed for deterministic output noise so renders are repeatable.
     flow_noise_seed: int
 
     @property
     def vocal_tract_omega_rad_s(self) -> float:
+        """Return tract angular frequency `omega_t = 2*pi*f_t`."""
+
         return 2.0 * pi * self.vocal_tract_frequency_hz
 
 
 @dataclass(frozen=True)
 class RenderConfig:
+    """Numerical settings for one offline render.
+
+    These are solver and sampling choices, not physical harmonica parameters.
+    The ODE is evaluated on an integration grid and later interpolated to the
+    audio sample rate.
+    """
+
+    # Total note length.
     duration_s: float = 2.5
+    # Output WAV/trace sample rate.
     sample_rate_hz: int = 44_100
+    # Dense reporting grid for the ODE solution before audio-rate interpolation.
     integration_rate_hz: int = 12_000
+    # Maximum adaptive solver step; smaller is safer but slower.
     max_step_s: float = 1.0 / 6_000.0
+    # Relative ODE solver tolerance.
     relative_tolerance: float = 1.0e-4
+    # Absolute ODE solver tolerance.
     absolute_tolerance: float = 1.0e-7
+    # SciPy ODE method used for stable offline integration.
     solve_method: str = "DOP853"
 
 
@@ -91,6 +170,12 @@ def _reed_from_frequency(
     closure_damping_kg_s: float,
     discharge_coefficient: float,
 ) -> ReedParams:
+    """Build a reed from frequency and Q instead of raw stiffness/damping.
+
+    This keeps the presets understandable: a reader can see "392 Hz, Q 18"
+    while the code derives `k = m omega^2` and `r = m omega / Q` for the ODE.
+    """
+
     omega = 2.0 * pi * frequency_hz
     stiffness = mass_kg * omega * omega
     damping = mass_kg * omega / quality_factor
@@ -110,6 +195,8 @@ def _reed_from_frequency(
     )
 
 
+# Default draw-note preset.  It uses negative mouth pressure and makes the draw
+# reed the more active, high-Q reed-slot oscillator.
 DEFAULT_PARAMS = ModelParams(
     rho_air_kg_m3=1.204,
     speed_of_sound_m_s=343.0,
@@ -173,6 +260,7 @@ DEFAULT_PARAMS = ModelParams(
 )
 
 
+# Public alias used by the CLI/tests when the requested mode is draw.
 DRAW_PARAMS = DEFAULT_PARAMS
 
 

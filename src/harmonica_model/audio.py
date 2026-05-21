@@ -1,3 +1,11 @@
+"""Audio export and physical output/radiation approximation.
+
+The ODE does not directly produce a finished WAV.  It produces physical states:
+chamber pressure, tract pressure, and flows.  This module turns those simulated
+states into an audible pressure-like waveform, then writes it as a WAV.  No
+samples, wavetables, pitch shifting, or synthetic oscillator are introduced.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +18,8 @@ from .params import ModelParams
 
 
 def write_wav(path: str | Path, audio: np.ndarray, sample_rate_hz: int) -> None:
+    """Write a normalized floating audio array as a 16-bit PCM WAV file."""
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     clipped = np.clip(np.asarray(audio, dtype=np.float32), -1.0, 1.0)
@@ -17,6 +27,12 @@ def write_wav(path: str | Path, audio: np.ndarray, sample_rate_hz: int) -> None:
 
 
 def normalize_audio(signal_values: np.ndarray, peak: float = 0.85) -> np.ndarray:
+    """Scale an audio-like signal to a target peak without changing its shape.
+
+    This is a single global scale factor.  It does not compress, pitch shift,
+    EQ, or add harmonic content.
+    """
+
     values = np.asarray(signal_values, dtype=float)
     max_abs = float(np.max(np.abs(values))) if values.size else 0.0
     if max_abs <= 0.0:
@@ -49,6 +65,9 @@ def physical_output_signal(
     q_d = np.asarray(q_d, dtype=float)
     leak_flow = params.chamber_leakage_conductance_m3_s_pa * p_c
     net_flow = q_b - q_d - leak_flow
+
+    # Choose a sensible flow gain if the preset did not set a direct net-flow
+    # gain.  This affects only output scaling before global normalization.
     flow_gain = params.acoustic_flow_gain_pa_s_m3
     if flow_gain == 0.0:
         flow_gain = max(
@@ -56,6 +75,9 @@ def physical_output_signal(
             abs(params.blow_flow_output_gain_pa_s_m3),
             1.0e7,
         )
+
+    # The mixed source is a documented physical combination of simulated
+    # pressures and flows.  It is not an extra tone generator.
     mixed = (
         params.chamber_pressure_output_gain * p_c
         + params.pressure_output_gain * p_t
@@ -64,6 +86,7 @@ def physical_output_signal(
         + params.blow_flow_output_gain_pa_s_m3 * q_b
     )
 
+    # Select which physical source should become the raw output waveform.
     output_mode = params.output_mode
     if output_mode == "pressure":
         raw = p_c
@@ -89,11 +112,16 @@ def physical_output_signal(
             raise ValueError(f"unsupported output mode/source: {output_mode}/{source}")
 
     radiated = np.asarray(raw, dtype=float)
+
+    # Radiation high-pass removes non-radiating slow pressure offsets that would
+    # be felt as static pressure, not heard as sound.
     if params.radiation_enabled and params.radiation_highpass_hz > 0.0 and radiated.size > 8:
         cutoff = min(params.radiation_highpass_hz, sample_rate_hz * 0.45)
         sos = signal.butter(1, cutoff, btype="highpass", fs=sample_rate_hz, output="sos")
         radiated = signal.sosfilt(sos, radiated)
 
+    # A compact acoustic flow source tends to radiate with a differentiating
+    # character.  The mix is bounded so this remains a conservative coloration.
     diff_mix = float(np.clip(params.radiation_differentiation_mix if params.radiation_enabled else 0.0, 0.0, 1.0))
     if diff_mix > 0.0 and radiated.size > 1:
         differentiated = np.gradient(radiated) * float(sample_rate_hz)
@@ -103,6 +131,8 @@ def physical_output_signal(
             differentiated = differentiated * (raw_peak / diff_peak)
             radiated = (1.0 - diff_mix) * radiated + diff_mix * differentiated
 
+    # Optional broad body/cover coloration.  Low Q and small gain keep this from
+    # becoming an independent ringing oscillator.
     if (
         params.radiation_enabled
         and params.body_resonance_gain > 0.0
@@ -115,6 +145,8 @@ def physical_output_signal(
         body = signal.lfilter(b, a, radiated)
         radiated = radiated + params.body_resonance_gain * body
 
+    # Optional unresolved turbulent noise.  Its envelope is derived from
+    # simulated Bernoulli flow magnitude, so it appears only when flow exists.
     if params.flow_noise_amount > 0.0 and radiated.size > 8:
         rng = np.random.default_rng(params.flow_noise_seed)
         white = rng.standard_normal(radiated.size)

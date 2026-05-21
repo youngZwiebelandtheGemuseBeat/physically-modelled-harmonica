@@ -6,6 +6,9 @@ Bernoulli flow, chamber pressure, and reduced vocal-tract equations; it does
 not use samples, wavetables, fake saw/filter synthesis, pitch shifting, machine
 learning, bend demonstrations, realtime audio, a GUI, or C++.
 
+For a defense-oriented map of the important files and model workflow, read
+`docs/CODE_WALKTHROUGH.md`.
+
 ## Render Modes
 
 ```text

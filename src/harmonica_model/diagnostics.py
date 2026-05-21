@@ -1,3 +1,11 @@
+"""Diagnostics, CSV traces, plots, and audit reports for rendered notes.
+
+This module is the "evidence layer" for the project.  It does not change the
+physical model; it measures the render result and writes files that make the
+simulation defendable: pressure signs, reed motion, flows, spectra, and target
+checks.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -20,6 +28,8 @@ from .render import RenderResult
 
 
 def _rms(signal: np.ndarray) -> float:
+    """Return root-mean-square level of a numeric trace."""
+
     values = np.asarray(signal, dtype=float)
     if values.size == 0:
         return 0.0
@@ -27,6 +37,8 @@ def _rms(signal: np.ndarray) -> float:
 
 
 def _time_window_rms(result: RenderResult, start_s: float, end_s: float) -> float:
+    """Return audio RMS inside a time window of a render."""
+
     mask = (result.time_s >= start_s) & (result.time_s < end_s)
     if not np.any(mask):
         return 0.0
@@ -34,6 +46,8 @@ def _time_window_rms(result: RenderResult, start_s: float, end_s: float) -> floa
 
 
 def _spectrum(signal: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return frequency bins, power, and dB spectrum for diagnostics."""
+
     centered = np.asarray(signal, dtype=float) - float(np.mean(signal))
     if centered.size == 0:
         return np.array([], dtype=float), np.array([], dtype=float), np.array([], dtype=float)
@@ -47,11 +61,15 @@ def _spectrum(signal: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.n
 
 
 def _band_energy(freqs_hz: np.ndarray, power: np.ndarray, center_hz: float, half_width_hz: float) -> float:
+    """Return spectral energy in a band around `center_hz`."""
+
     band = (freqs_hz >= center_hz - half_width_hz) & (freqs_hz <= center_hz + half_width_hz)
     return float(np.sum(power[band]))
 
 
 def _estimate_spectral_metrics(result: RenderResult) -> dict[str, float]:
+    """Estimate f0, harmonic ratio, centroid, and rolloff for one render."""
+
     freqs_hz, power, _ = _spectrum(result.audio, result.sample_rate_hz)
     if freqs_hz.size == 0 or float(np.sum(power)) <= 0.0:
         return {
@@ -104,6 +122,8 @@ def _estimate_spectral_metrics(result: RenderResult) -> dict[str, float]:
 
 
 def _near_closed_percent(area: np.ndarray) -> float:
+    """Return how often a reed opening is near its smallest observed area."""
+
     values = np.asarray(area, dtype=float)
     if values.size == 0:
         return 0.0
@@ -112,12 +132,16 @@ def _near_closed_percent(area: np.ndarray) -> float:
 
 
 def _mostly_sinusoidal(harmonic_energy_ratio: float, spectral_centroid_hz: float, fundamental_hz: float) -> bool:
+    """Heuristic flag for output that is still too close to a simple sine."""
+
     if fundamental_hz <= 0.0:
         return True
     return harmonic_energy_ratio < 0.05 and spectral_centroid_hz < fundamental_hz * 1.8
 
 
 def _attack_strength(result: RenderResult) -> float:
+    """Measure early waveform steepness as an attack/onset indicator."""
+
     if result.audio.size < 2:
         return 0.0
     onset_count = max(2, min(result.audio.size, int(round(0.12 * result.sample_rate_hz))))
@@ -129,6 +153,8 @@ def _attack_strength(result: RenderResult) -> float:
 
 
 def _dominant_reed_estimate(x_b_rms: float, x_d_rms: float) -> str:
+    """Estimate whether blow, draw, or both reeds dominate the motion."""
+
     if x_b_rms <= 1.0e-7 and x_d_rms <= 1.0e-7:
         return "neither reed"
     if x_b_rms > x_d_rms * 1.25:
@@ -139,6 +165,8 @@ def _dominant_reed_estimate(x_b_rms: float, x_d_rms: float) -> str:
 
 
 def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
+    """Collect all numeric pass/fail metrics used by reports and tests."""
+
     spectral = _estimate_spectral_metrics(result)
     audio_peak = float(np.max(np.abs(result.audio)))
     audio_rms = _rms(result.audio)
@@ -216,6 +244,13 @@ def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
 
 
 def write_trace_csv(path: str | Path, result: RenderResult) -> None:
+    """Write one row per audio sample with physical state and derived values.
+
+    This is the easiest file to inspect when someone asks "what happened at
+    this exact time?" because it contains pressure, reed displacement, flow,
+    opening area, forces, and the audio sample together.
+    """
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -273,6 +308,8 @@ def write_trace_csv(path: str | Path, result: RenderResult) -> None:
 
 
 def write_diagnostics_plot(path: str | Path, result: RenderResult, mode: str | None = None) -> None:
+    """Write a multi-panel plot explaining one rendered note."""
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     mode_name = mode or result.mode
@@ -350,6 +387,8 @@ def write_diagnostics_plot(path: str | Path, result: RenderResult, mode: str | N
 
 
 def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | None = None) -> None:
+    """Write a Markdown audit report for one render."""
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -494,6 +533,8 @@ def write_comparison_diagnostics_plot(
     draw_result: RenderResult,
     blow_result: RenderResult,
 ) -> None:
+    """Write a plot comparing draw and blow physical traces."""
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -567,12 +608,16 @@ def write_comparison_report(
     draw_result: RenderResult,
     blow_result: RenderResult,
 ) -> None:
+    """Write a Markdown report comparing draw and blow renders."""
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     draw_metrics = diagnostic_metrics(draw_result)
     blow_metrics = diagnostic_metrics(blow_result)
 
     def metric_line(label: str, key: str, fmt: str = ".6f") -> str:
+        """Format one draw/blow metric table row."""
+
         draw_value = draw_metrics[key]
         blow_value = blow_metrics[key]
         if isinstance(draw_value, bool):

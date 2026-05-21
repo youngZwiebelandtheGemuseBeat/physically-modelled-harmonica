@@ -1,3 +1,17 @@
+"""Command-line workflow for rendering and auditing the harmonica model.
+
+This script wires together the package modules:
+
+1. choose draw/blow parameters,
+2. optionally adjust breath and output controls from CLI arguments,
+3. run the offline ODE renderer,
+4. write WAV/CSV/diagnostic files, and
+5. optionally run sweeps, calibration, or reference analysis.
+
+The physical formulas are not defined here.  They live in
+`src/harmonica_model/equations.py`; this file is the operator interface.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -34,6 +48,8 @@ from harmonica_model.render import RenderResult, render_draw_note, render_note
 
 
 def _reed_with_q(reed: ReedParams, quality_factor: float) -> ReedParams:
+    """Return a reed with damping recalculated from a requested Q factor."""
+
     omega = sqrt(reed.stiffness_n_m / reed.mass_kg)
     return replace(reed, damping_kg_s=reed.mass_kg * omega / quality_factor)
 
@@ -46,6 +62,8 @@ def _draw_reed_variant(
     quality_factor: float,
     closure_damping_kg_s: float | None = None,
 ) -> ModelParams:
+    """Return draw-note parameters with a modified draw reed opening regime."""
+
     draw_reed = _reed_with_q(params.draw_reed, quality_factor)
     closing_displacement_m = -rest_opening_m / displacement_to_gap
     if closure_damping_kg_s is None:
@@ -68,6 +86,8 @@ def _reed_opening_variant(
     quality_factor: float | None = None,
     discharge_coefficient: float | None = None,
 ) -> ReedParams:
+    """Return a reed with optional changes to opening, Q, and discharge."""
+
     next_reed = _reed_with_q(reed, quality_factor) if quality_factor is not None else reed
     next_rest = next_reed.rest_opening_m if rest_opening_m is None else rest_opening_m
     next_scale = next_reed.displacement_to_gap if displacement_to_gap is None else displacement_to_gap
@@ -83,6 +103,8 @@ def _reed_opening_variant(
 
 
 def _sweep_candidates() -> list[tuple[str, ModelParams]]:
+    """Return hand-picked draw-mode candidates for exploratory rendering."""
+
     base = DEFAULT_PARAMS
     return [
         ("3b_default_tract_plus_draw_flow", base),
@@ -126,6 +148,8 @@ def _sweep_candidates() -> list[tuple[str, ModelParams]]:
 
 
 def _candidate_score(metrics: dict[str, float | bool | str]) -> float:
+    """Score sweep candidates using stability, harmonics, closure, and attack."""
+
     if not metrics["stable_non_clipped"]:
         return -1.0e6
     closure_values = [
@@ -148,6 +172,8 @@ def _calibration_score(
     analysis,
     reference_analysis=None,
 ) -> float:
+    """Score calibration candidates, optionally including reference similarity."""
+
     if not metrics["stable_non_clipped"]:
         return -1.0e6
     centroid_ratio = float(metrics["centroid_to_f0"])
@@ -169,6 +195,8 @@ def _calibration_score(
 
 
 def _calibration_candidates(mode: str) -> list[tuple[str, ModelParams]]:
+    """Return bounded physical parameter candidates for draw or blow mode."""
+
     base = _preset_for_mode(mode)
 
     if mode == "draw":
@@ -190,6 +218,8 @@ def _calibration_candidates(mode: str) -> list[tuple[str, ModelParams]]:
         active_discharge: float | None = None,
         passive_discharge: float | None = None,
     ) -> ModelParams:
+        """Modify active/passive reed settings without changing the ODE path."""
+
         active = _reed_opening_variant(
             getattr(params, active_reed_name),
             rest_opening_m=active_rest,
@@ -270,6 +300,8 @@ def _calibration_candidates(mode: str) -> list[tuple[str, ModelParams]]:
 
 
 def _write_sweep_report(path: Path, name: str, metrics: dict[str, float | bool | str], score: float) -> None:
+    """Write one Markdown report for a sweep candidate."""
+
     path.write_text(
         "\n".join(
             [
@@ -301,6 +333,8 @@ def _write_sweep_report(path: Path, name: str, metrics: dict[str, float | bool |
 
 
 def _signed_mode_pressure(value_pa: float, mode: str) -> float:
+    """Force CLI pressure magnitude to the correct sign for draw or blow."""
+
     if mode == "draw":
         return -abs(value_pa)
     if mode == "blow":
@@ -309,6 +343,8 @@ def _signed_mode_pressure(value_pa: float, mode: str) -> float:
 
 
 def _preset_for_mode(mode: str) -> ModelParams:
+    """Return the default physical preset for a render mode."""
+
     if mode == "draw":
         return DRAW_PARAMS
     if mode == "blow":
@@ -326,6 +362,8 @@ def _params_with_breath_controls(
     release_s: float | None,
     pressure_pa: float | None,
 ) -> ModelParams:
+    """Apply CLI breath controls while preserving draw/blow pressure sign."""
+
     next_params = params
     if pre_delay_s is not None:
         next_params = replace(next_params, pre_delay_s=pre_delay_s)
@@ -350,6 +388,8 @@ def _params_with_output_controls(
     noise_gain: float | None,
     radiation: str | None,
 ) -> ModelParams:
+    """Apply CLI output-layer controls to a parameter set."""
+
     next_params = replace(params, output_mode=output_mode)
     if noise_gain is not None:
         next_params = replace(next_params, flow_noise_amount=max(0.0, noise_gain))
@@ -359,6 +399,8 @@ def _params_with_output_controls(
 
 
 def render_mode_outputs(output_dir: Path, mode: str, params: ModelParams, config: RenderConfig) -> RenderResult:
+    """Render one mode and write all normal output artifacts."""
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     result = render_note(mode, params, config)
@@ -398,10 +440,14 @@ def render_mode_outputs(output_dir: Path, mode: str, params: ModelParams, config
 
 
 def render_default(output_dir: Path, params: ModelParams, config: RenderConfig) -> None:
+    """Render the historical default draw note."""
+
     render_mode_outputs(output_dir, "draw", params, config)
 
 
 def render_both(output_dir: Path, draw_params: ModelParams, blow_params: ModelParams, config: RenderConfig) -> None:
+    """Render draw and blow notes, then write comparison artifacts."""
+
     draw_result = render_mode_outputs(output_dir, "draw", draw_params, config)
     blow_result = render_mode_outputs(output_dir, "blow", blow_params, config)
 
@@ -420,6 +466,8 @@ def render_output_compare(
     blow_params: ModelParams,
     config: RenderConfig,
 ) -> None:
+    """Render pressure, flow, and mixed output modes for comparison."""
+
     compare_dir = output_dir / "output_compare"
     compare_dir.mkdir(parents=True, exist_ok=True)
     modes_to_render = ("draw", "blow") if mode == "both" else (mode,)
@@ -461,6 +509,8 @@ def render_output_compare(
 
 
 def render_sweep(output_dir: Path) -> None:
+    """Render the draw-mode sweep candidates and rank them."""
+
     sweep_dir = output_dir / "sweep"
     sweep_dir.mkdir(parents=True, exist_ok=True)
     config = RenderConfig(duration_s=2.5, sample_rate_hz=44_100)
@@ -500,6 +550,8 @@ def render_sweep(output_dir: Path) -> None:
 
 
 def analyze_reference(output_dir: Path, reference_path: Path) -> None:
+    """Analyze an external reference WAV without using it for synthesis."""
+
     analysis = analyze_wav(reference_path)
     report_path = output_dir / "reference_analysis.md"
     plot_path = output_dir / "reference_analysis.png"
@@ -510,6 +562,8 @@ def analyze_reference(output_dir: Path, reference_path: Path) -> None:
 
 
 def compare_render_to_reference(output_dir: Path, result: RenderResult, reference_path: Path) -> None:
+    """Compare one rendered result to a reference WAV by analysis metrics."""
+
     synthetic = analyze_audio(result.audio, result.sample_rate_hz)
     reference = analyze_wav(reference_path)
     report_path = output_dir / "reference_comparison.md"
@@ -520,6 +574,13 @@ def compare_render_to_reference(output_dir: Path, result: RenderResult, referenc
 
 
 def render_calibration(output_dir: Path, mode: str, reference_path: Path | None = None) -> None:
+    """Run a bounded calibration search and write ranked candidates.
+
+    Calibration changes physical parameters and output-layer settings, renders
+    each candidate, analyzes the result, and ranks candidates.  Reference audio,
+    if provided, is used only for scoring, never as an audio source.
+    """
+
     calibration_mode = "draw" if mode == "both" else mode
     calibration_dir = output_dir / "calibration"
     calibration_dir.mkdir(parents=True, exist_ok=True)
@@ -614,6 +675,8 @@ def render_calibration(output_dir: Path, mode: str, reference_path: Path | None 
 
 
 def main() -> None:
+    """Parse CLI arguments and dispatch to the requested workflow."""
+
     parser = argparse.ArgumentParser(description="Render the offline harmonica physical model.")
     parser.add_argument(
         "--mode",

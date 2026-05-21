@@ -1,3 +1,10 @@
+"""Audio-analysis helpers for validating and comparing rendered notes.
+
+These routines do not create the harmonica sound.  They measure an existing
+WAV/audio array so the project can report pitch, harmonic content, spectral
+centroid, attack time, and similarity to an optional reference recording.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,6 +29,13 @@ import matplotlib.pyplot as plt
 
 @dataclass(frozen=True)
 class SignalAnalysis:
+    """Summary measurements for one audio signal.
+
+    The fields are intentionally explicit because reports and comparison plots
+    use them directly when judging whether a render is stable, harmonic, and
+    recognizably different from a pure sine-like tone.
+    """
+
     sample_rate_hz: int
     duration_s: float
     fundamental_hz: float
@@ -39,12 +53,16 @@ class SignalAnalysis:
 
 
 def read_wav_mono(path: str | Path) -> tuple[np.ndarray, int]:
+    """Read any WAV as mono floating-point audio plus sample rate."""
+
     audio, sample_rate_hz = sf.read(Path(path), always_2d=True)
     mono = np.mean(np.asarray(audio, dtype=float), axis=1)
     return mono, int(sample_rate_hz)
 
 
 def _spectrum(audio: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return frequency bins, power, and dB magnitude for an audio signal."""
+
     values = np.asarray(audio, dtype=float)
     if values.size == 0:
         return np.array([]), np.array([]), np.array([])
@@ -59,6 +77,8 @@ def _spectrum(audio: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.nd
 
 
 def _rms_envelope(audio: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.ndarray]:
+    """Measure short-time RMS level so the attack can be estimated."""
+
     frame = max(256, int(round(0.025 * sample_rate_hz)))
     hop = max(64, int(round(0.005 * sample_rate_hz)))
     values = np.asarray(audio, dtype=float)
@@ -75,6 +95,8 @@ def _rms_envelope(audio: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, n
 
 
 def _fundamental_from_spectrum(freqs: np.ndarray, power: np.ndarray, sample_rate_hz: int) -> float:
+    """Estimate fundamental as the strongest audible spectral peak."""
+
     if freqs.size == 0 or float(np.sum(power)) <= 0.0:
         return 0.0
     mask = (freqs >= 70.0) & (freqs <= min(1600.0, sample_rate_hz * 0.45))
@@ -85,12 +107,16 @@ def _fundamental_from_spectrum(freqs: np.ndarray, power: np.ndarray, sample_rate
 
 
 def _band_amplitude(freqs: np.ndarray, power: np.ndarray, center_hz: float) -> float:
+    """Return total amplitude around one expected harmonic frequency."""
+
     half_width_hz = max(8.0, center_hz * 0.018)
     mask = (freqs >= center_hz - half_width_hz) & (freqs <= center_hz + half_width_hz)
     return float(np.sqrt(np.sum(power[mask]))) if np.any(mask) else 0.0
 
 
 def _attack_time(times: np.ndarray, envelope: np.ndarray) -> float:
+    """Estimate time between 10% and 90% of peak RMS envelope."""
+
     if envelope.size == 0:
         return 0.0
     peak = float(np.max(envelope))
@@ -106,6 +132,8 @@ def _attack_time(times: np.ndarray, envelope: np.ndarray) -> float:
 
 
 def _spectral_rolloff(freqs: np.ndarray, power: np.ndarray, percentile: float = 0.85) -> float:
+    """Return frequency below which `percentile` of spectral power lies."""
+
     positive = freqs > 0.0
     if not np.any(positive):
         return 0.0
@@ -118,6 +146,8 @@ def _spectral_rolloff(freqs: np.ndarray, power: np.ndarray, percentile: float = 
 
 
 def _spectral_envelope(freqs: np.ndarray, db: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.ndarray]:
+    """Build a smoothed high-level spectral envelope for plotting."""
+
     max_hz = min(8000.0, sample_rate_hz * 0.45)
     mask = (freqs > 0.0) & (freqs <= max_hz)
     if not np.any(mask):
@@ -141,6 +171,8 @@ def _spectral_envelope(freqs: np.ndarray, db: np.ndarray, sample_rate_hz: int) -
 
 
 def analyze_audio(audio: np.ndarray, sample_rate_hz: int) -> SignalAnalysis:
+    """Measure pitch, harmonics, spectrum, and attack for an audio array."""
+
     values = np.asarray(audio, dtype=float)
     freqs, power, db = _spectrum(values, sample_rate_hz)
     f0 = _fundamental_from_spectrum(freqs, power, sample_rate_hz)
@@ -179,11 +211,15 @@ def analyze_audio(audio: np.ndarray, sample_rate_hz: int) -> SignalAnalysis:
 
 
 def analyze_wav(path: str | Path) -> SignalAnalysis:
+    """Read a WAV from disk and run `analyze_audio()` on it."""
+
     audio, sample_rate_hz = read_wav_mono(path)
     return analyze_audio(audio, sample_rate_hz)
 
 
 def write_analysis_report(path: str | Path, title: str, analysis: SignalAnalysis) -> None:
+    """Write a Markdown report containing the analysis numbers."""
+
     lines = [
         f"# {title}",
         "",
@@ -209,6 +245,8 @@ def write_analysis_report(path: str | Path, title: str, analysis: SignalAnalysis
 
 
 def write_analysis_plot(path: str | Path, title: str, analysis: SignalAnalysis) -> None:
+    """Write a four-panel PNG showing envelope, spectrum, and harmonics."""
+
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -247,6 +285,12 @@ def write_analysis_plot(path: str | Path, title: str, analysis: SignalAnalysis) 
 
 
 def comparison_score(synthetic: SignalAnalysis, reference: SignalAnalysis) -> float:
+    """Return a bounded similarity score between synthetic and reference audio.
+
+    The score compares analysis features only.  Reference audio is never used
+    as a source for rendering.
+    """
+
     if reference.fundamental_hz <= 0.0 or synthetic.fundamental_hz <= 0.0:
         return 0.0
     centroid_error = abs(synthetic.spectral_centroid_hz - reference.spectral_centroid_hz) / max(reference.spectral_centroid_hz, 1.0)
@@ -271,6 +315,8 @@ def write_reference_comparison(
     synthetic: SignalAnalysis,
     reference: SignalAnalysis,
 ) -> None:
+    """Write Markdown and PNG comparison between rendered and reference audio."""
+
     score = comparison_score(synthetic, reference)
     lines = [
         "# Synthetic vs Reference Comparison",
