@@ -85,6 +85,18 @@ p_c' = rho c^2 / V_c * (Q_b - Q_d)
 ```
 
 The chamber pressure must feed back into reed forces and the flow equations.
+The implementation keeps this proposal term explicit and adds one documented
+loss extension:
+
+```text
+Q_loss = G_c p_c
+p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)
+```
+
+`G_c` is small and pressure-proportional. It represents unresolved chamber,
+slot, cover-plate, and radiation losses so the chamber is not an ideal sealed
+lossless compliance during note release. Setting `G_c = 0` recovers the proposal
+equation exactly.
 
 ## Acoustic Load
 
@@ -109,4 +121,4 @@ used to fake timbre.
 The rendered audio must be physically derived from simulated chamber pressure
 and/or flow, for example `p_c`, `Q_b`, `Q_d`, `p_t`, or a weighted physical
 combination. It must not use samples, wavetables, sawtooth/filter fake harmonica
-synthesis, pitch shifting as bending, or machine learning.
+synthesis, pitch shifting, bend demonstrations, or machine learning.

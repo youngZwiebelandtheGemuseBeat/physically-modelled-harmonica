@@ -93,6 +93,25 @@ def test_draw_and_blow_outputs_are_not_identical() -> None:
     assert float(np.std(blow_result.x_b[blow_sustain])) > 1.0e-6
 
 
+def test_draw_and_blow_have_audible_physical_separation() -> None:
+    config = RenderConfig(duration_s=0.50, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    draw_result = render_note("draw", DRAW_PARAMS, config)
+    blow_result = render_note("blow", BLOW_PARAMS, config)
+    draw_metrics = diagnostic_metrics(draw_result)
+    blow_metrics = diagnostic_metrics(blow_result)
+
+    assert draw_metrics["dominant_reed_estimate"] == "draw reed"
+    assert blow_metrics["dominant_reed_estimate"] == "blow reed"
+    assert float(draw_metrics["harmonic_energy_ratio"]) > 0.60
+    assert float(blow_metrics["harmonic_energy_ratio"]) > 0.25
+    assert abs(float(draw_metrics["fundamental_hz"]) - float(blow_metrics["fundamental_hz"])) > 25.0
+    assert float(draw_metrics["area_d_closed_percent"]) > 5.0
+    assert float(blow_metrics["area_b_closed_percent"]) > 5.0
+    assert draw_result.params.mouth_pressure_pa < 0.0
+    assert blow_result.params.mouth_pressure_pa > 0.0
+
+
 def test_render_exposes_full_coupled_state_and_feedback() -> None:
     result = render_draw_note(
         DEFAULT_PARAMS,
@@ -107,6 +126,7 @@ def test_render_exposes_full_coupled_state_and_feedback() -> None:
         result.p_t,
         result.q_b,
         result.q_d,
+        result.q_loss,
         result.area_b,
         result.area_d,
         result.breath_envelope,

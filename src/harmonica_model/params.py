@@ -48,6 +48,7 @@ class ModelParams:
     blow_flow_output_gain_pa_s_m3: float
     output_mode: str
     output_source: str
+    chamber_loss_conductance_m3_s_pa: float
     chamber_leakage_conductance_m3_s_pa: float
     radiation_enabled: bool
     radiation_highpass_hz: float
@@ -148,8 +149,8 @@ DEFAULT_PARAMS = ModelParams(
     mouth_pressure_pa=-900.0,
     pre_delay_s=0.05,
     attack_s=0.35,
-    release_s=0.20,
-    release_start_s=2.30,
+    release_s=0.05,
+    release_start_s=2.45,
     breath_noise_amount=0.0,
     acoustic_flow_gain_pa_s_m3=0.0,
     pressure_output_gain=0.01,
@@ -158,6 +159,7 @@ DEFAULT_PARAMS = ModelParams(
     blow_flow_output_gain_pa_s_m3=0.0,
     output_mode="mixed",
     output_source="mix",
+    chamber_loss_conductance_m3_s_pa=2.0e-11,
     chamber_leakage_conductance_m3_s_pa=0.0,
     radiation_enabled=True,
     radiation_highpass_hz=90.0,
@@ -174,6 +176,11 @@ DEFAULT_PARAMS = ModelParams(
 DRAW_PARAMS = DEFAULT_PARAMS
 
 
+# Blow uses the same ODE as draw, but a different physical playing preset:
+# positive mouth pressure, the blow reed as the high-Q active reed, a slightly
+# stronger breath drive, and a brighter physical radiation path from simulated
+# net flow. These differences are intentionally parameter-level differences,
+# not a separate synth voice or a post-render pitch/EQ trick.
 BLOW_PARAMS = ModelParams(
     rho_air_kg_m3=1.204,
     speed_of_sound_m_s=343.0,
@@ -207,29 +214,30 @@ BLOW_PARAMS = ModelParams(
         closure_damping_kg_s=4.0e-4,
         discharge_coefficient=0.62,
     ),
-    vocal_tract_frequency_hz=520.0,
-    vocal_tract_q=5.0,
-    vocal_tract_impedance_pa_s_m3=2.2e8,
-    mouth_pressure_pa=600.0,
+    vocal_tract_frequency_hz=780.0,
+    vocal_tract_q=4.5,
+    vocal_tract_impedance_pa_s_m3=2.4e8,
+    mouth_pressure_pa=800.0,
     pre_delay_s=0.05,
     attack_s=0.35,
-    release_s=0.20,
-    release_start_s=2.30,
+    release_s=0.05,
+    release_start_s=2.45,
     breath_noise_amount=0.0,
-    acoustic_flow_gain_pa_s_m3=0.0,
+    acoustic_flow_gain_pa_s_m3=1.0e8,
     pressure_output_gain=0.01,
     chamber_pressure_output_gain=0.0,
     draw_flow_output_gain_pa_s_m3=0.0,
     blow_flow_output_gain_pa_s_m3=1.0e7,
     output_mode="mixed",
     output_source="mix",
+    chamber_loss_conductance_m3_s_pa=2.0e-11,
     chamber_leakage_conductance_m3_s_pa=0.0,
     radiation_enabled=True,
-    radiation_highpass_hz=90.0,
-    radiation_differentiation_mix=0.18,
-    body_resonance_frequency_hz=1600.0,
+    radiation_highpass_hz=150.0,
+    radiation_differentiation_mix=0.40,
+    body_resonance_frequency_hz=2100.0,
     body_resonance_q=1.5,
-    body_resonance_gain=0.08,
+    body_resonance_gain=0.18,
     flow_noise_amount=0.006,
     flow_noise_power=1.4,
     flow_noise_seed=23,

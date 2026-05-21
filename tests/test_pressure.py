@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from dataclasses import replace
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +21,13 @@ def test_chamber_pressure_derivative_signs() -> None:
     assert chamber_pressure_derivative(1.0e-7, 0.0, params) > 0.0
     assert chamber_pressure_derivative(0.0, 1.0e-7, params) < 0.0
     assert chamber_pressure_derivative(-1.0e-7, -2.0e-7, params) > 0.0
+
+
+def test_chamber_loss_opposes_existing_pressure() -> None:
+    params = replace(DEFAULT_PARAMS, chamber_loss_conductance_m3_s_pa=2.0e-11)
+
+    assert chamber_pressure_derivative(0.0, 0.0, params, p_c_pa=100.0) < 0.0
+    assert chamber_pressure_derivative(0.0, 0.0, params, p_c_pa=-100.0) > 0.0
 
 
 def test_draw_and_blow_pressure_sign_convention() -> None:

@@ -31,11 +31,12 @@ The harmonica character must emerge from:
   coupling.
 - Draw and blow notes with clean sign convention and different physical
   parameter presets.
-- Bend demonstration caused by changing vocal-tract resonance/loading, not by
-  pitch shifting.
+- Audible separation between blow and draw caused by the active reed, pressure
+  sign, reed-slot closure regime, chamber/load coupling, and simulated
+  pressure/flow radiation balance.
 
 ## Explicit Non-Targets
 
 Do not make the sound more harmonica-like by using samples, wavetable synthesis,
-sawtooth/filter fake harmonica synthesis, pitch shifting as bending, machine
-learning, a GUI, realtime audio, or a C++ rewrite for this prototype.
+sawtooth/filter fake harmonica synthesis, pitch shifting, bend demonstrations,
+machine learning, a GUI, realtime audio, or a C++ rewrite for this prototype.

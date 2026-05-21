@@ -185,7 +185,8 @@ Current result:
 - draw remains the best-sounding harmonica-like preset
 - blow is stable, non-silent, pressure-sign-correct, and blow-reed dominant
 - draw and blow outputs are not identical
-- blow now has sustained reed oscillation and blow-reed near closure
+- blow now has sustained reed oscillation, blow-reed near closure, and stronger
+  harmonic content than the first dull preset
 - both modes can still use further tone-quality and brightness tuning
 
 ## Milestone 5: Reference-Based Calibration And Radiation Layer
@@ -223,14 +224,70 @@ Reference WAVs are never used as a synthesis source. The ODE state derivative
 continues to implement the proposal reed, Bernoulli flow, chamber pressure, and
 vocal-tract equations.
 
-## Milestone 5B: Vocal-Tract Sweep / Bend Demonstration
+## Milestone 5B: Audible Blow/Draw Separation
 
-Add a vocal-tract parameter sweep / bend demonstration. Do not use fake pitch
-shifting. Bending must come from changing vocal-tract resonance/loading
-parameters.
+Status: Done for the first tuned preset; keep one listening pass open.
 
-Acceptance: render a short sweep where pitch and timbre change because of tract
-parameters.
+The project does not pursue bends. Milestone 5B instead makes the existing blow
+and draw modes audibly separated while keeping both on the same physical ODE
+path.
+
+Separation controls:
+
+- signed breath pressure: draw suction vs blow pressure
+- active high-Q reed: draw reed for draw, blow reed for blow
+- mode-specific reed-slot closure regime
+- vocal-tract loading parameters
+- simulated pressure/flow radiation balance
+
+Acceptance:
+
+- `python run.py --mode both` writes draw and blow WAVs, traces, diagnostics,
+  and comparison reports.
+- draw is draw-reed dominant.
+- blow is blow-reed dominant.
+- both notes are stable, non-silent, and non-clipped.
+- both notes show useful near-closure behavior in the expected active reed.
+- blow harmonic ratio is no longer the first dull `~0.10` baseline and should
+  stay above `0.25` in the regression test.
+- the difference is documented as a physical preset difference, not as samples,
+  wavetables, pitch shifting, or a separate oscillator.
+
+Current full-render metrics from `outputs/comparison_report.md`:
+
+- draw f0: `444.00 Hz`
+- blow f0: `398.40 Hz`
+- fundamental separation: `45.60 Hz`
+- draw harmonic energy ratio: `0.784579`
+- blow harmonic energy ratio: `0.449031`
+- draw active closure: draw reed near closed `48.24%`
+- blow active closure: blow reed near closed `49.84%`
+- dominant reeds: draw=`draw reed`, blow=`blow reed`
+
+## Milestone 6B: Release Cleanup And Chamber Loss
+
+Status: Done for the first default render.
+
+The previous default release used a `0.20 s` pressure ramp. During shutdown the
+reed amplitude and chamber/tract operating point changed enough to create a
+bend-like release tail. Milestone 6B fixes that in the physical model path:
+
+- default release is now `0.05 s`
+- release starts at `2.45 s` for a `2.5 s` render
+- chamber pressure includes a small acoustic loss flow `Q_loss = G_c p_c`
+- default `G_c = 2.0e-11 m^3/(s Pa)`
+- traces and reports now include `Q_loss`
+
+The chamber equation remains explicit:
+
+```text
+p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)
+```
+
+Setting `G_c = 0` recovers the original proposal chamber equation exactly.
+Zero-crossing checks after the change show no meaningful release bend in the
+default render: draw stays around `443.9 Hz`, and blow moves only from
+`398.2 Hz` to `397.7 Hz` near the tail.
 
 ## Milestone 6: Audible Radiation / Output Stage
 

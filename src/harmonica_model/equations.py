@@ -29,6 +29,7 @@ class DerivedValues:
     area_d: float
     q_b: float
     q_d: float
+    q_loss: float
     force_b: float
     force_d: float
     dp_c: float
@@ -81,15 +82,36 @@ def draw_reed_force(p_c_pa: float, params: ModelParams) -> float:
     return params.draw_reed.pressure_area_m2 * (p_c_pa - params.p_out_pa)
 
 
-def chamber_pressure_derivative(q_b_m3_s: float, q_d_m3_s: float, params: ModelParams) -> float:
-    """p_c' = rho c^2 / V_c * (Q_b - Q_d)."""
+def chamber_loss_flow(p_c_pa: float, params: ModelParams) -> float:
+    """Small pressure-proportional acoustic loss flow from the chamber."""
+
+    return params.chamber_loss_conductance_m3_s_pa * p_c_pa
+
+
+def chamber_pressure_derivative(
+    q_b_m3_s: float,
+    q_d_m3_s: float,
+    params: ModelParams,
+    p_c_pa: float = 0.0,
+) -> float:
+    """p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss).
+
+    With zero chamber loss this is exactly the proposal equation. The default
+    presets use a small pressure-proportional loss so chamber pressure energy
+    can decay physically during release instead of ringing as an ideal sealed
+    compliance.
+    """
 
     stiffness = params.rho_air_kg_m3 * params.speed_of_sound_m_s**2 / params.chamber_volume_m3
-    return stiffness * (q_b_m3_s - q_d_m3_s)
+    return stiffness * (q_b_m3_s - q_d_m3_s - chamber_loss_flow(p_c_pa, params))
 
 
 def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.ndarray:
     x_b, v_b, x_d, v_d, p_c, p_t, v_t = state
+
+    # This is the player's signed breath pressure before any acoustic state is
+    # computed. It shapes the physical drive terms below; the rendered audio is
+    # not faded afterward to fake an attack.
     p_m = mouth_pressure_source(t_s, params)
 
     area_b = reed_opening_area(x_b, params.blow_reed)
@@ -101,6 +123,10 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
 
     force_b = blow_reed_force(p_m, p_c, params)
     force_d = draw_reed_force(p_c, params)
+
+    # Keep the two pressure drops explicit because this is where blow/draw
+    # direction enters the proposal equations. Draw uses negative p_m; blow
+    # uses positive p_m. The signs here also determine the Bernoulli flow signs.
     delta_p_b = p_m - p_c
     delta_p_d = p_c - params.p_out_pa
 
@@ -129,9 +155,12 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
         - damping_d * v_d
         - params.draw_reed.stiffness_n_m * x_d
     ) / params.draw_reed.mass_kg
-    dp_c = chamber_pressure_derivative(q_b, q_d, params)
+    dp_c = chamber_pressure_derivative(q_b, q_d, params, p_c)
 
     omega_t = params.vocal_tract_omega_rad_s
+
+    # The tract is a reduced acoustic load driven by net simulated flow. It is
+    # not an independent oscillator layered onto the audio.
     flow_drive = q_b - q_d
     dp_t = v_t
     dv_t = (
@@ -165,11 +194,12 @@ def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> Derive
         params,
         params.draw_reed.discharge_coefficient,
     )
-    dp_c = chamber_pressure_derivative(q_b, q_d, params)
+    q_loss = chamber_loss_flow(p_c, params)
+    dp_c = chamber_pressure_derivative(q_b, q_d, params, p_c)
     audio_pressure = (
         params.chamber_pressure_output_gain * p_c
         + params.pressure_output_gain * p_t
-        + params.acoustic_flow_gain_pa_s_m3 * (q_b - q_d)
+        + params.acoustic_flow_gain_pa_s_m3 * (q_b - q_d - q_loss)
         + params.draw_flow_output_gain_pa_s_m3 * q_d
         + params.blow_flow_output_gain_pa_s_m3 * q_b
     )
@@ -182,6 +212,7 @@ def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> Derive
         area_d=area_d,
         q_b=q_b,
         q_d=q_d,
+        q_loss=q_loss,
         force_b=force_b,
         force_d=force_d,
         dp_c=dp_c,

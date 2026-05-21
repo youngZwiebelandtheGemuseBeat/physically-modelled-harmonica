@@ -14,7 +14,8 @@ without adding a fake synthesis layer.
 - chamber volume / pressure scaling
 - opening function and reed closure
 - output choice from `p_c`, `Q_b`, `Q_d`, or a weighted physical combination
-- vocal-tract resonance, Q, and loading parameters for bending demonstrations
+- vocal-tract resonance, Q, and loading parameters for acoustic loading and
+  blow/draw separation
 - radiation high-pass / differentiating tendency for simulated flow output
 - low-Q body/chamber coloration
 - low-level turbulent flow noise driven by simulated flows and pressure drops
@@ -24,7 +25,8 @@ without adding a fake synthesis layer.
 - samples
 - wavetable synthesis
 - sawtooth/filter fake harmonica synthesis
-- pitch shifting as bending
+- pitch shifting
+- bend demonstrations
 - machine learning
 - GUI work
 - realtime audio work
@@ -145,12 +147,13 @@ Draw tuning starts from the Milestone 3D baseline. It should preserve the
 draw-reed near-closure behavior, the `444 Hz` fundamental estimate, the
 non-sinusoidal harmonic ratio, and the slow physical breath attack.
 
-Blow tuning starts from the first Milestone 4 blow preset. It should preserve
-positive mouth pressure and blow-reed dominance. The next useful changes are
-physical only: blow-reed rest opening, displacement-to-gap scale, pressure
-area, Q/damping, chamber volume, vocal-tract loading, and the physical output
-mix from pressure/flow states. Do not improve the blow note by adding a fake
-oscillator, pitch shifter, sample, wavetable, or subtractive synth layer.
+Blow tuning starts from the first Milestone 4 blow preset. It must preserve
+positive mouth pressure and blow-reed dominance. Milestone 5B has already made
+the first stronger separation pass through physical parameters: stronger
+positive breath pressure, brighter tract loading, and a stronger mixed
+pressure/net-flow radiation path from simulated states. Do not improve the blow
+note by adding a fake oscillator, pitch shifter, sample, wavetable, or
+subtractive synth layer.
 
 Use `outputs/comparison_report.md` and
 `outputs/comparison_diagnostics.png` after `--mode both` to confirm:
@@ -160,6 +163,34 @@ Use `outputs/comparison_report.md` and
 - the draw report estimates draw-reed dominance
 - the blow report estimates blow-reed dominance
 - both modes remain stable and non-silent
+
+## Milestone 5B Blow/Draw Separation
+
+The project does not implement bends. Milestone 5B uses the same model controls
+to separate blow and draw as two playable directions of one channel.
+
+Procedure:
+
+1. Keep the same coupled ODE for both modes.
+2. Keep pressure sign convention fixed: draw uses negative `p_m`, blow uses
+   positive `p_m`.
+3. Tune which reed is active by changing physical reed parameters: Q/damping,
+   rest opening, displacement-to-gap scale, pressure area, and discharge
+   coefficient.
+4. Use chamber and vocal-tract loading to change the coupled response, not to
+   fake a separate pitch effect.
+5. Use output/radiation settings only on simulated pressure and flow states.
+6. Require the reports to show dominant reed, f0, harmonic ratio, centroid,
+   active reed near-closure, pressure sign, and output settings.
+
+Acceptance:
+
+- draw dominant reed estimate: `draw reed`
+- blow dominant reed estimate: `blow reed`
+- draw harmonic ratio: `> 0.60` in the regression render
+- blow harmonic ratio: `> 0.25` in the regression render
+- draw and blow f0 separation: `> 25 Hz`
+- active reed near-closure: `> 5%` for the expected active reed in each mode
 
 ## Milestone 5 Reference And Calibration Protocol
 
@@ -388,8 +419,8 @@ Default Milestone 3D controls:
 - duration: `2.5 s`
 - pre-delay: `0.05 s`
 - attack time: `0.35 s`
-- release time: `0.20 s`
-- release start: `2.30 s`
+- release time: `0.05 s`
+- release start: `2.45 s`
 - sustain pressure: `-900 Pa`
 - breath noise amount: `0`
 
@@ -398,7 +429,7 @@ CLI controls:
 ```text
 python run.py --attack 0.35
 python run.py --pre-delay 0.05
-python run.py --release 0.20
+python run.py --release 0.05
 python run.py --duration 2.5
 python run.py --pressure 900
 ```
@@ -409,28 +440,28 @@ negative signed mouth pressure. Negative values are used as given.
 Latest default metrics from `outputs/draw_note_report.md`:
 
 - peak audio: `0.850000`
-- RMS audio: `0.373684`
-- RMS first 100 ms: `0.005430`
-- RMS sustain region 0.7-1.2 s: `0.404238`
-- attack ratio first/sustain: `0.013433`
+- RMS audio: `0.374389`
+- RMS first 100 ms: `0.000655`
+- RMS sustain region 0.7-1.2 s: `0.399379`
+- attack ratio first/sustain: `0.001640`
 - estimated fundamental: `444.00 Hz`
-- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701115`
-- spectral centroid: `652.27 Hz`
-- spectral centroid / f0: `1.47`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.784579`
+- spectral centroid: `683.51 Hz`
+- spectral centroid / f0: `1.54`
 - mostly sinusoidal: `no`
-- draw reed opening near closed: `48.58%`
+- draw reed opening near closed: `48.24%`
 - chamber pressure feedback nonzero: `yes`
 - reed participation: `both reeds participate`
 
 Metric interpretation:
 
-- Attack ratio `0.013433` is below the acceptance target `< 0.35`, so the first
+- Attack ratio `0.001640` is below the acceptance target `< 0.35`, so the first
   100 ms is much quieter than the sustain region.
-- Harmonic energy ratio `0.701115` and `mostly sinusoidal: no` show that the
+- Harmonic energy ratio `0.784579` and `mostly sinusoidal: no` show that the
   Milestone 3B harmonic character survived the slower breath attack.
-- Draw reed near closure at `48.58%` confirms that reed-slot nonlinearity
+- Draw reed near closure at `48.24%` confirms that reed-slot nonlinearity
   remains active.
-- Spectral centroid / f0 `1.47` remains below the optional `2x f0` brightness
+- Spectral centroid / f0 `1.54` remains below the optional `2x f0` brightness
   target, so future tuning should still focus on brightness only when stability
   and physical coupling are preserved.
 

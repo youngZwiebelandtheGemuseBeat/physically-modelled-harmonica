@@ -19,7 +19,8 @@ diatonic harmonica. Future work must preserve that boundary.
 - samples
 - wavetable synthesis
 - sawtooth/filter fake harmonica synthesis
-- pitch shifting as bending
+- pitch shifting
+- bend demonstrations
 - machine learning
 - GUI
 - realtime audio
@@ -40,11 +41,18 @@ Q_d = C_d A_d(x_d) sgn(p_c - p_out) sqrt(2 |p_c - p_out| / rho)
 
 p_c' = rho c^2 / V_c * (Q_b - Q_d)
 
+Optional documented chamber loss extension:
+
+Q_loss = G_c p_c
+p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)
+
 Z(omega) = P(omega) / Q(omega)
 
 p_t'' + (omega_t / Q_t) p_t' + omega_t^2 p_t
 = omega_t^2 Z_t (Q_b - Q_d)
 ```
+
+Setting `G_c = 0` recovers the required proposal chamber equation exactly.
 
 ## Required Baseline Outputs
 

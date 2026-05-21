@@ -153,6 +153,7 @@ def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
     p_t_rms = _rms(result.p_t)
     q_b_rms = _rms(result.q_b)
     q_d_rms = _rms(result.q_d)
+    q_loss_rms = _rms(result.q_loss)
     area_b_closed = _near_closed_percent(result.area_b)
     area_d_closed = _near_closed_percent(result.area_d)
 
@@ -196,6 +197,7 @@ def diagnostic_metrics(result: RenderResult) -> dict[str, float | bool | str]:
         "p_t_rms": p_t_rms,
         "q_b_rms": q_b_rms,
         "q_d_rms": q_d_rms,
+        "q_loss_rms": q_loss_rms,
         "area_b_closed_percent": area_b_closed,
         "area_d_closed_percent": area_d_closed,
         "chamber_feedback_nonzero": chamber_feedback_nonzero,
@@ -233,6 +235,7 @@ def write_trace_csv(path: str | Path, result: RenderResult) -> None:
                 "v_d_m_s",
                 "q_b_m3_s",
                 "q_d_m3_s",
+                "q_loss_m3_s",
                 "area_b_m2",
                 "area_d_m2",
                 "delta_p_b_pa",
@@ -257,6 +260,7 @@ def write_trace_csv(path: str | Path, result: RenderResult) -> None:
                     f"{result.v_d[i]:.9e}",
                     f"{result.q_b[i]:.9e}",
                     f"{result.q_d[i]:.9e}",
+                    f"{result.q_loss[i]:.9e}",
                     f"{result.area_b[i]:.9e}",
                     f"{result.area_d[i]:.9e}",
                     f"{result.delta_p_b[i]:.9e}",
@@ -329,8 +333,8 @@ def write_diagnostics_plot(path: str | Path, result: RenderResult, mode: str | N
     axes[4, 0].set_xlabel("time s")
     axes[4, 0].legend(loc="upper right")
 
-    net_flow = result.q_b - result.q_d
-    axes[4, 1].plot(result.time_s, net_flow * 1.0e6, label="Q_b - Q_d", linewidth=0.8)
+    net_flow = result.q_b - result.q_d - result.q_loss
+    axes[4, 1].plot(result.time_s, net_flow * 1.0e6, label="Q_b - Q_d - Q_loss", linewidth=0.8)
     axes[4, 1].plot(result.time_s, result.dp_c / 1.0e6, label="p_c' / 1e6", linewidth=0.8)
     axes[4, 1].set_title("Chamber feedback drive")
     axes[4, 1].set_ylabel("flow ml/s, pressure slope")
@@ -352,6 +356,7 @@ def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | 
     metrics = diagnostic_metrics(result)
     mode_name = mode or result.mode
     expected_reed = "draw reed" if mode_name == "draw" else "blow reed"
+    separation_harmonic_target = 0.60 if mode_name == "draw" else 0.25
 
     lines = [
         f"# {mode_name.title()} Note Diagnostic Report",
@@ -398,6 +403,8 @@ def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | 
         f"- RMS p_t: {metrics['p_t_rms']:.9e} Pa",
         f"- RMS Q_b: {metrics['q_b_rms']:.9e} m^3/s",
         f"- RMS Q_d: {metrics['q_d_rms']:.9e} m^3/s",
+        f"- RMS Q_loss: {metrics['q_loss_rms']:.9e} m^3/s",
+        f"- Chamber loss conductance: {result.params.chamber_loss_conductance_m3_s_pa:.9e} m^3/(s Pa)",
         f"- Blow reed opening near closed: {metrics['area_b_closed_percent']:.2f}%",
         f"- Draw reed opening near closed: {metrics['area_d_closed_percent']:.2f}%",
         f"- Chamber pressure feedback nonzero: {'yes' if metrics['chamber_feedback_nonzero'] else 'no'}",
@@ -421,6 +428,15 @@ def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | 
         "- Target render: same coupled model with mode-specific pressure sign and preset.",
         f"- Expected dominant reed: {expected_reed}.",
         f"- Estimated dominant reed: {metrics['dominant_reed_estimate']}.",
+        "",
+        "## Blow/Draw Separation Targets",
+        "",
+        "- Target: this preset has a distinct active reed, pressure sign, loading, and output balance.",
+        "- Target: the audible result is separated by physical states, not by pitch shifting or a separate synth layer.",
+        f"- Target harmonic energy ratio for this mode: > {separation_harmonic_target:.2f}.",
+        "",
+        f"- Separation harmonic target met: {'yes' if metrics['harmonic_energy_ratio'] > separation_harmonic_target else 'no'}",
+        f"- Dominant reed target met: {'yes' if metrics['dominant_reed_estimate'] == expected_reed else 'no'}",
         "",
         "## Milestone 3D Targets",
         "",
@@ -450,7 +466,7 @@ def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | 
         "- PASS: blow force uses `F_b = S_b (p_m - p_c)`.",
         "- PASS: draw force uses `F_d = S_d (p_c - p_out)`.",
         "- PASS: Bernoulli flows use signed square-root pressure laws for `Q_b` and `Q_d`.",
-        "- PASS: chamber pressure uses `p_c' = rho c^2 / V_c * (Q_b - Q_d)`.",
+        "- PASS: chamber pressure uses `p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)` with documented small acoustic loss.",
         "- PASS: vocal tract uses the second-order resonator driven by `Q_b - Q_d`.",
         "",
         "## Audit Interpretation",
@@ -461,7 +477,11 @@ def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | 
             "damping, and using a pressure/flow radiation approximation from simulated states. "
             "Milestone 3D restores audible Einschwingen by applying the raised-cosine breath "
             "envelope to the mouth-pressure source before the reed force and Bernoulli flow "
-            "equations are evaluated."
+            "equations are evaluated. The blow/draw separation target keeps that same core "
+            "model and changes only physical preset parameters and the documented radiation "
+            "path from simulated pressure/flow states. Milestone 6B adds a small documented "
+            "chamber acoustic loss and a shorter physical pressure release to avoid a "
+            "bend-like shutdown tail."
         ),
         "",
     ]
@@ -570,6 +590,10 @@ def write_comparison_report(
         draw_result.audio.shape == blow_result.audio.shape
         and np.allclose(draw_result.audio, blow_result.audio)
     )
+    f0_difference_hz = abs(float(draw_metrics["fundamental_hz"]) - float(blow_metrics["fundamental_hz"]))
+    harmonic_difference = abs(
+        float(draw_metrics["harmonic_energy_ratio"]) - float(blow_metrics["harmonic_energy_ratio"])
+    )
 
     lines = [
         "# Draw vs Blow Comparison Report",
@@ -581,6 +605,7 @@ def write_comparison_report(
         "- `DeltaP_b = p_m - p_c`; positive values drive blow-side flow toward the chamber.",
         "- `DeltaP_d = p_c - p_out`; positive values drive draw-side/outlet flow away from the chamber.",
         "- The draw preset should emphasize draw-reed motion; the blow preset should emphasize blow-reed motion.",
+        "- Audible separation should come from pressure sign, active reed parameters, tract loading, and simulated pressure/flow radiation.",
         "",
         "## Metrics",
         "",
@@ -597,6 +622,7 @@ def write_comparison_report(
         metric_line("RMS p_t Pa", "p_t_rms", ".9e"),
         metric_line("RMS Q_b m^3/s", "q_b_rms", ".9e"),
         metric_line("RMS Q_d m^3/s", "q_d_rms", ".9e"),
+        metric_line("RMS Q_loss m^3/s", "q_loss_rms", ".9e"),
         metric_line("Blow opening near closed %", "area_b_closed_percent", ".2f"),
         metric_line("Draw opening near closed %", "area_d_closed_percent", ".2f"),
         metric_line("Attack ratio", "attack_ratio"),
@@ -613,6 +639,16 @@ def write_comparison_report(
         f"- Blow radiation enabled: {'yes' if blow_result.params.radiation_enabled else 'no'}",
         f"- Draw noise gain: {draw_result.params.flow_noise_amount:.4f}",
         f"- Blow noise gain: {blow_result.params.flow_noise_amount:.4f}",
+        f"- Draw chamber loss conductance: {draw_result.params.chamber_loss_conductance_m3_s_pa:.9e} m^3/(s Pa)",
+        f"- Blow chamber loss conductance: {blow_result.params.chamber_loss_conductance_m3_s_pa:.9e} m^3/(s Pa)",
+        f"- Fundamental separation: {f0_difference_hz:.2f} Hz",
+        f"- Harmonic-ratio separation: {harmonic_difference:.6f}",
+        f"- Draw separation target met: {'yes' if draw_metrics['dominant_reed_estimate'] == 'draw reed' and float(draw_metrics['harmonic_energy_ratio']) > 0.60 else 'no'}",
+        f"- Blow separation target met: {'yes' if blow_metrics['dominant_reed_estimate'] == 'blow reed' and float(blow_metrics['harmonic_energy_ratio']) > 0.25 else 'no'}",
+        "",
+        "## Interpretation",
+        "",
+        "Draw and blow use the same coupled ODE and the same sign convention. The presets separate audibly by changing the signed breath pressure, which reed is the active high-Q reed, the reed-slot closure regime, the vocal-tract load, and the pressure/flow radiation balance. These are physical model controls rather than samples, wavetables, pitch shifting, or an extra oscillator.",
         "",
     ]
     output_path.write_text("\n".join(lines), encoding="utf-8")

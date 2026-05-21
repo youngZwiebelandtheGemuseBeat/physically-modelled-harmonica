@@ -89,7 +89,7 @@
 - [x] Improve the first blow preset so it has sustained reed oscillation.
 - [x] Add a regression test so blow mode cannot pass with only a DC airflow
       plateau.
-- [ ] Continue tuning draw/blow brightness and tone quality through physical
+- [x] Continue tuning draw/blow brightness and tone quality through physical
       parameters only.
 
 ## Milestone 5: Reference-Based Calibration And Radiation Layer
@@ -120,12 +120,41 @@
 - [x] Keep the core ODE proposal equations intact.
 - [x] Document radiation and noise approximations physically.
 
-## Milestone 5B: Vocal-Tract Sweep / Bend Demonstration
+## Milestone 5B: Audible Blow/Draw Separation
 
-- [ ] Add tract parameter sweep.
-- [ ] Change pitch/timbre through vocal-tract resonance/loading parameters.
-- [ ] Do not use fake pitch shifting.
-- [ ] Render a short bend demonstration.
+- [x] Remove bend demonstration from the active roadmap.
+- [x] Keep draw and blow on the same coupled ODE path.
+- [x] Make draw and blow audibly distinct through physical preset parameters.
+- [x] Keep draw dominated by the draw reed.
+- [x] Keep blow dominated by the blow reed.
+- [x] Raise blow harmonic content above the first dull-but-stable preset.
+- [x] Keep both presets stable, non-silent, and non-clipped.
+- [x] Add regression tests for physical blow/draw separation.
+- [x] Include separation metrics in diagnostic/comparison reports.
+- [ ] Listen to the rendered WAVs and make one final subjective pass.
+
+## Current Milestone 5B Baseline
+
+- [x] Draw f0: `444.00 Hz`.
+- [x] Blow f0: `398.40 Hz`.
+- [x] Fundamental separation: `45.60 Hz`.
+- [x] Draw harmonic energy ratio: `0.784579`.
+- [x] Blow harmonic energy ratio: `0.449031`.
+- [x] Draw dominant reed: `draw reed`.
+- [x] Blow dominant reed: `blow reed`.
+- [x] Draw active closure: draw reed near closed `48.24%`.
+- [x] Blow active closure: blow reed near closed `49.84%`.
+
+## Milestone 6B: Release Cleanup And Chamber Loss
+
+- [x] Shorten default pressure release to reduce bend-like shutdown.
+- [x] Add documented chamber acoustic loss term `Q_loss = G_c p_c`.
+- [x] Keep `G_c` small enough to preserve sustained draw/blow tone.
+- [x] Write `Q_loss` into traces and reports.
+- [x] Add regression test that chamber loss opposes existing pressure.
+- [x] Verify release zero-crossing frequency stays essentially flat.
+- [ ] Make one listening pass and decide whether release should be even shorter
+      for the final professor-demo WAVs.
 
 ## Milestone 6: Audible Radiation / Output Stage
 

@@ -4,7 +4,7 @@ Physical modeling of one channel of a diatonic harmonica.
 This is an offline Python prototype. It renders audio from the coupled reed,
 Bernoulli flow, chamber pressure, and reduced vocal-tract equations; it does
 not use samples, wavetables, fake saw/filter synthesis, pitch shifting, machine
-learning, realtime audio, a GUI, or C++.
+learning, bend demonstrations, realtime audio, a GUI, or C++.
 
 ## Render Modes
 

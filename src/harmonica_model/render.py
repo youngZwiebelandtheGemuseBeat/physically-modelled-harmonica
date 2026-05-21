@@ -37,6 +37,7 @@ class RenderResult:
     area_d: np.ndarray
     q_b: np.ndarray
     q_d: np.ndarray
+    q_loss: np.ndarray
     force_b: np.ndarray
     force_d: np.ndarray
     dp_c: np.ndarray
@@ -109,6 +110,7 @@ def render_note(
     area_d = np.array([value.area_d for value in derived], dtype=float)
     q_b = np.array([value.q_b for value in derived], dtype=float)
     q_d = np.array([value.q_d for value in derived], dtype=float)
+    q_loss = np.array([value.q_loss for value in derived], dtype=float)
     force_b = np.array([value.force_b for value in derived], dtype=float)
     force_d = np.array([value.force_d for value in derived], dtype=float)
     dp_c = np.array([value.dp_c for value in derived], dtype=float)
@@ -138,6 +140,7 @@ def render_note(
         area_d=area_d,
         q_b=q_b,
         q_d=q_d,
+        q_loss=q_loss,
         force_b=force_b,
         force_d=force_d,
         dp_c=dp_c,

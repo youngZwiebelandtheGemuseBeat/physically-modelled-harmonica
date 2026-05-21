@@ -15,7 +15,11 @@ presets. Milestone 5 adds reference-based analysis, synthetic/reference
 comparison, a more explicit radiation/output layer, low-level flow-driven noise,
 and a bounded physical parameter calibration search. Milestone 6 makes the
 output/radiation stage selectable and auditable so pressure, flow, and mixed
-radiation can be compared without changing the core ODE state.
+radiation can be compared without changing the core ODE state. Milestone 5B
+replaces the former bend-demo direction with audible blow/draw separation. The
+project does not implement bends; separation is now achieved by signed breath
+pressure, active reed choice, reed-slot closure regime, tract loading, and
+simulated pressure/flow radiation balance.
 
 Milestone 2 implements the full proposal state vector
 `[x_b, v_b, x_d, v_d, p_c, p_t, v_t]` in one coupled ODE system solved with
@@ -54,6 +58,12 @@ Approximations:
   fixed discharge coefficient times effective area times signed jet speed.
 - Chamber pressure is an acoustic compliance state driven by `Q_b - Q_d` and
   feeds back into both reed pressure forces and both flow pressure drops.
+- Milestone 6B adds a small pressure-proportional chamber loss
+  `Q_loss = G_c p_c` inside the chamber ODE, giving
+  `p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)`. This is a documented acoustic
+  loss approximation for unresolved leakage, cover-plate/body losses, and
+  radiation damping. It keeps the proposal term explicit, and setting
+  `G_c = 0` recovers the original ideal chamber equation.
 - The chamber volume is an effective acoustic compliance chosen for stable
   offline integration and stronger pressure feedback, not a detailed geometric
   measurement.
@@ -82,9 +92,9 @@ Approximations:
   output/radiation layer as an unresolved turbulent/noisy-flow approximation;
   it is not fed back into the reed equations and is not a constant noise bed.
 - `chamber_leakage_conductance_m3_s_pa` is used only in the radiation/output
-  stage as a small pressure-proportional leakage flow contribution. The core
-  chamber pressure ODE remains the proposal equation
-  `p_c' = rho c^2 / V_c * (Q_b - Q_d)`.
+  stage as a small pressure-proportional leakage flow contribution. The ODE
+  chamber loss is the separate `chamber_loss_conductance_m3_s_pa` term described
+  above.
 - The draw note uses a signed mouth-pressure source
   `p_m_source(t) = mouth_pressure_pa * envelope(t)`. For the default draw note,
   `mouth_pressure_pa` is negative. The envelope is zero during `pre_delay_s`,
@@ -102,13 +112,14 @@ Approximations:
   draw-reed gap modulation, and output weighted toward tract pressure plus
   draw-side flow.
 - The blow preset reverses the pressure direction with
-  `mouth_pressure_pa = +600 Pa`. It uses a blow-reed-dominant parameter set:
+  `mouth_pressure_pa = +800 Pa`. It uses a blow-reed-dominant parameter set:
   higher blow-reed Q than the passive draw reed, positive-pressure forcing on
   the blow reed, an active blow gap that reaches near closure during
-  oscillation, and output weighted toward blow-side flow plus a small
-  tract-pressure component.
+  oscillation, stronger vocal-tract loading near the second harmonic region,
+  and a brighter mixed pressure/net-flow radiation balance. These are physical
+  preset differences on the same ODE path, not a separate synthesis layer.
 - The default draw breath controls are `pre_delay_s = 0.05`,
-  `attack_s = 0.35`, `release_s = 0.20`, `release_start_s = 2.30`,
+  `attack_s = 0.35`, `release_s = 0.05`, `release_start_s = 2.45`,
   `mouth_pressure_pa = -900`, and `breath_noise_amount = 0`.
 - Audio normalization is global peak scaling only. The renderer no longer
   subtracts a global DC mean before scaling, because doing so can add an
@@ -151,89 +162,99 @@ Approximations:
   not part of the ODE by default.
 - `python run.py --output-compare` writes pressure, flow, and mixed WAVs plus
   reports under `outputs/output_compare/`.
+- Milestone 6B shortens the default pressure release to `0.05 s` and adds the
+  chamber loss term above. This removes the bend-like audible shutdown tail in
+  the default demo render without pitch shifting or post-render correction.
 
 ## Current Acoustic Observations
 
-The current default render is audibly closer to a harmonica than the Milestone 1
-and Milestone 2 baselines. It has a clear reed-centered pitch, stronger harmonic
-content, and a less purely sinusoidal waveform. The stronger nonlinear
-reed-slot tuning makes the tone more reed-like, but the breath-shaped onset is
-less natural than desired. The next audible improvement should be a smooth,
-controllable pressure attack rather than more output processing.
+The current default draw and blow renders are audibly separated while still
+using the same coupled model. Draw remains the brighter, stronger harmonic
+baseline around `444 Hz`. Blow is now a distinct `398 Hz` response with
+blow-reed dominance, active blow-reed near-closure, stronger chamber/tract
+pressure, and much more harmonic content than the first dull-but-stable blow
+preset.
 
 ## Current Diagnostic Metrics
 
-Latest draw metrics from `outputs/draw_note_report.md` after Milestone 4:
+Latest draw metrics from `outputs/draw_note_report.md` after Milestone 6B:
 
 - peak audio: `0.850000`
-- RMS audio: `0.373684`
-- RMS first 100 ms: `0.005430`
-- RMS sustain region 0.7-1.2 s: `0.404238`
-- attack ratio first/sustain: `0.013433`
+- RMS audio: `0.374389`
+- RMS first 100 ms: `0.000655`
+- RMS sustain region 0.7-1.2 s: `0.399379`
+- attack ratio first/sustain: `0.001640`
 - estimated fundamental: `444.00 Hz`
-- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.701115`
-- spectral centroid: `652.27 Hz`
-- spectral centroid / f0: `1.47`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.784579`
+- spectral centroid: `683.51 Hz`
+- spectral centroid / f0: `1.54`
 - mostly sinusoidal: `no`
-- attack strength: `1.19`
-- RMS `x_b`: `1.874150840e-05 m`
-- RMS `x_d`: `2.917331347e-05 m`
-- RMS `p_c`: `1.984474327e+02 Pa`
-- RMS `p_t`: `4.928161716e+02 Pa`
-- RMS `Q_b`: `1.147609846e-06 m^3/s`
-- RMS `Q_d`: `1.748453097e-06 m^3/s`
+- attack strength: `2.40`
+- RMS `x_b`: `1.916230174e-05 m`
+- RMS `x_d`: `2.958300218e-05 m`
+- RMS `p_c`: `2.010667976e+02 Pa`
+- RMS `p_t`: `5.001192076e+02 Pa`
+- RMS `Q_b`: `1.168114601e-06 m^3/s`
+- RMS `Q_d`: `1.774414967e-06 m^3/s`
+- RMS `Q_loss`: `4.021335952e-09 m^3/s`
 - blow reed opening near closed: `0.00%`
-- draw reed opening near closed: `48.58%`
+- draw reed opening near closed: `48.24%`
 - chamber pressure feedback nonzero: `yes`
 - reed participation: `both reeds participate`
 - dominant reed estimate: `draw reed`
 - mouth pressure min/max: `-900.000 / -0.000 Pa`
 - breath envelope min/max: `0.000 / 1.000`
 
-Latest blow metrics from `outputs/blow_note_report.md` after Milestone 4:
+Latest blow metrics from `outputs/blow_note_report.md` after Milestone 6B:
 
 - peak audio: `0.850000`
-- RMS audio: `0.382622`
-- RMS first 100 ms: `0.002765`
-- RMS sustain region 0.7-1.2 s: `0.416823`
-- attack ratio first/sustain: `0.006633`
-- estimated fundamental: `398.00 Hz`
-- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.082648`
-- spectral centroid: `439.17 Hz`
-- spectral centroid / f0: `1.10`
+- RMS audio: `0.342852`
+- RMS first 100 ms: `0.000020`
+- RMS sustain region 0.7-1.2 s: `0.365758`
+- attack ratio first/sustain: `0.000056`
+- estimated fundamental: `398.40 Hz`
+- harmonic energy ratio, harmonics 2-8 vs fundamental: `0.449031`
+- spectral centroid: `638.60 Hz`
+- spectral centroid / f0: `1.60`
 - mostly sinusoidal: `no`
-- RMS `x_b`: `3.697034001e-05 m`
-- RMS `x_d`: `1.111069244e-05 m`
-- RMS `p_c`: `4.056957853e+02 Pa`
-- RMS `p_t`: `6.075870920e+02 Pa`
-- RMS `Q_b`: `1.746924386e-06 m^3/s`
-- RMS `Q_d`: `1.130973124e-06 m^3/s`
-- blow reed opening near closed: `49.69%`
+- RMS `x_b`: `4.544233629e-05 m`
+- RMS `x_d`: `1.493016174e-05 m`
+- RMS `p_c`: `5.798207837e+02 Pa`
+- RMS `p_t`: `8.579844549e+02 Pa`
+- RMS `Q_b`: `2.201150802e-06 m^3/s`
+- RMS `Q_d`: `1.397575662e-06 m^3/s`
+- RMS `Q_loss`: `1.159641567e-08 m^3/s`
+- blow reed opening near closed: `49.84%`
 - draw reed opening near closed: `0.00%`
 - chamber pressure feedback nonzero: `yes`
 - reed participation: `both reeds participate`
 - dominant reed estimate: `blow reed`
-- mouth pressure min/max: `0.000 / 600.000 Pa`
+- mouth pressure min/max: `0.000 / 800.000 Pa`
 - breath envelope min/max: `0.000 / 1.000`
 
 Interpretation:
 
-- The harmonic energy ratio is well above the `0.05` Milestone 3B threshold, so
-  the output is no longer dominated by only the fundamental.
+- The draw and blow harmonic energy ratios are both well above the `0.05`
+  Milestone 3B threshold, so neither output is only a simple fundamental.
 - `Mostly sinusoidal: no` confirms that the render moved beyond the stable but
   sine-like Milestone 1 result.
-- Spectral centroid / f0 `1.47` shows added brightness, but it remains below
-  the optional `2x f0` target.
-- Draw reed near closure at `48.58%` shows that the reed-slot nonlinearity is
+- Spectral centroid / f0 remains below the optional `2x f0` target, but blow
+  improved from about `1.10` to `1.60`, making the two directions much less
+  similar in practice.
+- Draw reed near closure at `48.24%` shows that the reed-slot nonlinearity is
   physically active for a meaningful part of the note.
-- Attack ratio `0.013433` is below the Milestone 3D target of `0.35`, so the
+- Attack ratio `0.001640` is below the Milestone 3D target of `0.35`, so the
   first 100 ms is much quieter than the sustain region and the pressure buildup
   is audible and visible in diagnostics.
 - Nonzero `p_c`, `p_t`, `Q_b`, and `Q_d` RMS values show that the chamber,
   vocal tract, and flows are participating in the coupled model.
 - The blow preset is stable, non-silent, pressure-sign-correct, and
-  blow-reed-dominant. It now shows sustained AC motion and blow-reed near
-  closure instead of a static flow plateau.
+  blow-reed-dominant. It now shows sustained AC motion, blow-reed near closure,
+  and a harmonic ratio of `0.449031`, compared with the old `0.097100` full
+  render baseline.
+- With the shortened physical release and chamber loss, the measured
+  zero-crossing frequency remains essentially flat through the tail:
+  draw `443.9 Hz -> 443.9 Hz`, blow `398.2 Hz -> 397.7 Hz`.
 
 ## Current Strengths And Weaknesses
 
