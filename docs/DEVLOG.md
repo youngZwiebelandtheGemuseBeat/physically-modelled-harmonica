@@ -219,3 +219,43 @@ The calibration search covers reed Q/damping, active reed rest opening and
 opening scale, discharge coefficients, chamber volume, leakage-radiation
 conductance, vocal-tract resonance/Q/coupling, output source, radiation
 settings, and flow-noise amount.
+
+## Milestone 6 Audible Radiation Controls
+
+Milestone 6 audits and exposes the output path rather than changing the core
+physical equations. The render still solves the coupled reed, Bernoulli flow,
+chamber pressure, and reduced vocal-tract ODE first. Audio is then built in
+`physical_output_signal()` from simulated states only.
+
+Output path audit:
+
+- `p_c`: used directly by `--output pressure`
+- `p_t`: available as a simulated pressure component in the mixed output
+- `Q_b` and `Q_d`: available in mixed output and net-flow radiation
+- `Q_b - Q_d`: used by `--output flow`
+- reed displacement: not mixed directly into audio
+
+New CLI controls:
+
+```text
+python run.py --mode draw --output pressure
+python run.py --mode draw --output flow
+python run.py --mode draw --output mixed
+python run.py --mode both --output mixed
+python run.py --mode draw --noise 0.02
+python run.py --mode draw --radiation on
+python run.py --output-compare
+```
+
+Radiation remains a conservative post-ODE approximation: high-pass behavior for
+compact acoustic radiation, optional partial differentiation for flow-derived
+sources, and a broad low-Q body/cover coloration. Flow noise is subtle by
+default and follows `normalized(abs(Q_b) + abs(Q_d))^noise_power`, so it is
+present only when simulated flow is present. It is not fed back into reed
+dynamics.
+
+Reports now include output mode, radiation settings, noise gain, harmonic
+energy ratio, spectral centroid, spectral rolloff, and attack ratio. The
+`--output-compare` command writes pressure, flow, and mixed WAVs under
+`outputs/output_compare/` so the audible contribution of the output layer can be
+checked directly.

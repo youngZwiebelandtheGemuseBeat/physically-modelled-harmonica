@@ -13,7 +13,9 @@ Milestone 4 adds explicit draw, blow, and both render modes using the same
 coupled physical model with mode-specific signed pressure and parameter
 presets. Milestone 5 adds reference-based analysis, synthetic/reference
 comparison, a more explicit radiation/output layer, low-level flow-driven noise,
-and a bounded physical parameter calibration search.
+and a bounded physical parameter calibration search. Milestone 6 makes the
+output/radiation stage selectable and auditable so pressure, flow, and mixed
+radiation can be compared without changing the core ODE state.
 
 Milestone 2 implements the full proposal state vector
 `[x_b, v_b, x_d, v_d, p_c, p_t, v_t]` in one coupled ODE system solved with
@@ -74,10 +76,11 @@ Approximations:
   simulated pressure/flow source. It approximates broad cover-plate, hand, and
   small-cavity coloration. It is intentionally low-Q and cannot create a note by
   itself.
-- Optional flow noise is disabled by default. When enabled, its amplitude is
-  multiplied by `(|Q_b| + |Q_d|) * sqrt(|DeltaP_b| + |DeltaP_d|)`, so it grows
-  only when the Bernoulli flows and pressure drops indicate turbulent flow. It
-  is a low-level turbulence/noisy-jet approximation, not an arbitrary noise bed.
+- Flow noise is subtle by default and can be set from the CLI. Its amplitude is
+  `noise_gain * normalized(|Q_b| + |Q_d|)^noise_power`, so it grows only when
+  the simulated Bernoulli flows are active. It is injected only in the
+  output/radiation layer as an unresolved turbulent/noisy-flow approximation;
+  it is not fed back into the reed equations and is not a constant noise bed.
 - `chamber_leakage_conductance_m3_s_pa` is used only in the radiation/output
   stage as a small pressure-proportional leakage flow contribution. The core
   chamber pressure ODE remains the proposal equation
@@ -136,6 +139,18 @@ Approximations:
   `brighter_flow_radiation`, which increases the harmonic energy ratio from the
   radiated baseline `0.788` to `1.017` and the centroid from about `684 Hz` to
   about `766 Hz` in the calibration analysis.
+- `python run.py --mode draw --output pressure`, `--output flow`, and
+  `--output mixed` select the final radiation source. Pressure mode uses `p_c`.
+  Flow mode uses scaled `Q_b - Q_d` after the small output-layer leakage term.
+  Mixed mode combines simulated pressure and flow terms.
+- `python run.py --mode draw --radiation on|off` enables or bypasses the
+  radiation high-pass, differentiating tendency, and broad body/cover
+  coloration. These filters are conservative output approximations only.
+- `python run.py --mode draw --noise 0.02` sets the flow-driven turbulence
+  approximation gain. The noise envelope is derived from simulated flows and is
+  not part of the ODE by default.
+- `python run.py --output-compare` writes pressure, flow, and mixed WAVs plus
+  reports under `outputs/output_compare/`.
 
 ## Current Acoustic Observations
 

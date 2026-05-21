@@ -58,6 +58,7 @@ def _estimate_spectral_metrics(result: RenderResult) -> dict[str, float]:
             "fundamental_hz": 0.0,
             "harmonic_energy_ratio": 0.0,
             "spectral_centroid_hz": 0.0,
+            "spectral_rolloff_hz": 0.0,
         }
 
     audible = (freqs_hz >= 50.0) & (freqs_hz <= min(5000.0, result.sample_rate_hz * 0.5))
@@ -72,6 +73,13 @@ def _estimate_spectral_metrics(result: RenderResult) -> dict[str, float]:
     spectral_centroid_hz = (
         float(np.sum(freqs_hz[positive] * power[positive]) / total_power)
         if total_power > 0.0
+        else 0.0
+    )
+    cumulative_power = np.cumsum(power[positive])
+    rolloff_index = int(np.searchsorted(cumulative_power, 0.85 * total_power)) if total_power > 0.0 else 0
+    spectral_rolloff_hz = (
+        float(freqs_hz[positive][min(rolloff_index, cumulative_power.size - 1)])
+        if cumulative_power.size
         else 0.0
     )
 
@@ -91,6 +99,7 @@ def _estimate_spectral_metrics(result: RenderResult) -> dict[str, float]:
         "fundamental_hz": fundamental_hz,
         "harmonic_energy_ratio": harmonic_energy_ratio,
         "spectral_centroid_hz": spectral_centroid_hz,
+        "spectral_rolloff_hz": spectral_rolloff_hz,
     }
 
 
@@ -365,9 +374,21 @@ def write_diagnostic_report(path: str | Path, result: RenderResult, mode: str | 
         f"- Estimated fundamental frequency: {metrics['fundamental_hz']:.2f} Hz",
         f"- Harmonic energy ratio, harmonics 2-8 vs fundamental: {metrics['harmonic_energy_ratio']:.6f}",
         f"- Spectral centroid: {metrics['spectral_centroid_hz']:.2f} Hz",
+        f"- Spectral rolloff 85%: {metrics['spectral_rolloff_hz']:.2f} Hz",
         f"- Spectral centroid / f0: {metrics['centroid_to_f0']:.2f}",
         f"- Mostly sinusoidal: {'yes' if metrics['mostly_sinusoidal'] else 'no'}",
         f"- Attack strength: {metrics['attack_strength']:.2f}",
+        "",
+        "## Output / Radiation Settings",
+        "",
+        f"- Output mode: {result.params.output_mode}",
+        f"- Legacy output source: {result.params.output_source}",
+        f"- Radiation enabled: {'yes' if result.params.radiation_enabled else 'no'}",
+        f"- Radiation high-pass: {result.params.radiation_highpass_hz:.1f} Hz",
+        f"- Radiation differentiation mix: {result.params.radiation_differentiation_mix:.3f}",
+        f"- Body/cover resonance: {result.params.body_resonance_frequency_hz:.1f} Hz, Q={result.params.body_resonance_q:.2f}, gain={result.params.body_resonance_gain:.3f}",
+        f"- Noise gain: {result.params.flow_noise_amount:.4f}",
+        f"- Noise flow power: {result.params.flow_noise_power:.3f}",
         "",
         "## Physical State Metrics",
         "",
@@ -568,6 +589,7 @@ def write_comparison_report(
         metric_line("Fundamental estimate Hz", "fundamental_hz", ".2f"),
         metric_line("Harmonic energy ratio", "harmonic_energy_ratio"),
         metric_line("Spectral centroid Hz", "spectral_centroid_hz", ".2f"),
+        metric_line("Spectral rolloff 85% Hz", "spectral_rolloff_hz", ".2f"),
         metric_line("Mostly sinusoidal", "mostly_sinusoidal"),
         metric_line("RMS x_b m", "x_b_rms", ".9e"),
         metric_line("RMS x_d m", "x_d_rms", ".9e"),
@@ -585,6 +607,12 @@ def write_comparison_report(
         f"- Draw and blow audio arrays identical: {'yes' if same_audio else 'no'}",
         f"- Draw mouth pressure min/max: {float(np.min(draw_result.p_m)):.3f} / {float(np.max(draw_result.p_m)):.3f} Pa",
         f"- Blow mouth pressure min/max: {float(np.min(blow_result.p_m)):.3f} / {float(np.max(blow_result.p_m)):.3f} Pa",
+        f"- Draw output mode: {draw_result.params.output_mode}",
+        f"- Blow output mode: {blow_result.params.output_mode}",
+        f"- Draw radiation enabled: {'yes' if draw_result.params.radiation_enabled else 'no'}",
+        f"- Blow radiation enabled: {'yes' if blow_result.params.radiation_enabled else 'no'}",
+        f"- Draw noise gain: {draw_result.params.flow_noise_amount:.4f}",
+        f"- Blow noise gain: {blow_result.params.flow_noise_amount:.4f}",
         "",
     ]
     output_path.write_text("\n".join(lines), encoding="utf-8")

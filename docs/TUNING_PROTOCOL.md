@@ -187,8 +187,8 @@ Radiation tuning rules:
   radiation tends toward pressure proportional to volume velocity derivative.
 - Body coloration must remain a low-Q coloration of the simulated source, not a
   narrow resonator that creates an independent note.
-- Flow-noise amount must remain low and must be driven by `abs(Q_b)`,
-  `abs(Q_d)`, and pressure drops. Do not add a constant noise bed.
+- Flow-noise amount must remain low and must be driven by `abs(Q_b)` and
+  `abs(Q_d)`. Do not add a constant noise bed.
 - Reference files must not be loaded into the renderer, looped, resynthesized,
   pitch-shifted, or used as wavetables.
 
@@ -200,6 +200,35 @@ Current `--calibrate` baseline:
 - top WAVs: `outputs/calibration/best_01_brighter_flow_radiation.wav`,
   `outputs/calibration/best_02_tract_near_second_harmonic.wav`, and
   `outputs/calibration/best_03_tighter_active_opening.wav`
+
+## Milestone 6 Output/Radiation Protocol
+
+Render and compare the output layer without changing the ODE:
+
+```text
+python run.py --mode draw --output pressure
+python run.py --mode draw --output flow
+python run.py --mode draw --output mixed
+python run.py --mode both --output mixed
+python run.py --mode draw --noise 0.02
+python run.py --mode draw --radiation on
+python run.py --output-compare
+```
+
+Interpretation rules:
+
+- `pressure` should expose the raw chamber-pressure character from `p_c`.
+- `flow` should sound brighter/more radiated because compact volume-velocity
+  radiation has a high-pass or differentiating tendency.
+- `mixed` should remain the default listening candidate because it combines
+  simulated pressure and flow components without adding a separate oscillator.
+- Radiation `off` is an audit path; radiation `on` is the intended acoustic
+  output approximation.
+- Noise gains should stay subtle. Values around `0.006` to `0.02` are intended
+  as low-level unresolved turbulent-flow coloration, not hiss.
+
+Each render report should include output mode, radiation settings, noise gain,
+harmonic energy ratio, spectral centroid, spectral rolloff, and attack ratio.
 
 ## Milestone 3 Acceptance Checks
 

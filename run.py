@@ -221,6 +221,7 @@ def _calibration_candidates(mode: str) -> list[tuple[str, ModelParams]]:
             "net_flow_radiator",
             replace(
                 base,
+                output_mode="flow",
                 output_source="net_flow",
                 acoustic_flow_gain_pa_s_m3=1.4e8,
                 radiation_highpass_hz=120.0,
@@ -342,6 +343,21 @@ def _params_with_breath_controls(
     return replace(next_params, release_start_s=release_start_s)
 
 
+def _params_with_output_controls(
+    params: ModelParams,
+    *,
+    output_mode: str,
+    noise_gain: float | None,
+    radiation: str | None,
+) -> ModelParams:
+    next_params = replace(params, output_mode=output_mode)
+    if noise_gain is not None:
+        next_params = replace(next_params, flow_noise_amount=max(0.0, noise_gain))
+    if radiation is not None:
+        next_params = replace(next_params, radiation_enabled=(radiation == "on"))
+    return next_params
+
+
 def render_mode_outputs(output_dir: Path, mode: str, params: ModelParams, config: RenderConfig) -> RenderResult:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -372,6 +388,12 @@ def render_mode_outputs(output_dir: Path, mode: str, params: ModelParams, config
         f"release={params.release_s:.3f}s, "
         f"pressure={params.mouth_pressure_pa:.1f}Pa"
     )
+    print(
+        "Output "
+        f"mode={params.output_mode}, "
+        f"radiation={'on' if params.radiation_enabled else 'off'}, "
+        f"noise={params.flow_noise_amount:.4f}"
+    )
     return result
 
 
@@ -389,6 +411,53 @@ def render_both(output_dir: Path, draw_params: ModelParams, blow_params: ModelPa
     write_comparison_diagnostics_plot(comparison_plot_path, draw_result, blow_result)
     print(f"Wrote {comparison_report_path}")
     print(f"Wrote {comparison_plot_path}")
+
+
+def render_output_compare(
+    output_dir: Path,
+    mode: str,
+    draw_params: ModelParams,
+    blow_params: ModelParams,
+    config: RenderConfig,
+) -> None:
+    compare_dir = output_dir / "output_compare"
+    compare_dir.mkdir(parents=True, exist_ok=True)
+    modes_to_render = ("draw", "blow") if mode == "both" else (mode,)
+    summary_lines = [
+        "# Output Mode Comparison",
+        "",
+        "- Core ODE state is unchanged across pressure, flow, and mixed renders.",
+        "- Only the radiation/output layer is changed.",
+        "",
+        "| Render | Output mode | Radiation | Noise gain | Harmonic ratio | Centroid Hz | Rolloff Hz | Attack ratio | WAV |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+
+    for note_mode in modes_to_render:
+        base_params = draw_params if note_mode == "draw" else blow_params
+        for output_mode in ("pressure", "flow", "mixed"):
+            params = replace(base_params, output_mode=output_mode)
+            result = render_note(note_mode, params, config)
+            metrics = diagnostic_metrics(result)
+            stem = f"{note_mode}_{output_mode}"
+            wav_path = compare_dir / f"{stem}.wav"
+            report_path = compare_dir / f"{stem}_report.md"
+            write_wav(wav_path, result.audio, result.sample_rate_hz)
+            write_diagnostic_report(report_path, result, note_mode)
+            summary_lines.append(
+                (
+                    f"| {note_mode} | {output_mode} | {'on' if params.radiation_enabled else 'off'} | "
+                    f"{params.flow_noise_amount:.4f} | {metrics['harmonic_energy_ratio']:.6f} | "
+                    f"{metrics['spectral_centroid_hz']:.2f} | {metrics['spectral_rolloff_hz']:.2f} | "
+                    f"{metrics['attack_ratio']:.6f} | `{wav_path.name}` |"
+                )
+            )
+            print(f"Wrote {wav_path}")
+            print(f"Wrote {report_path}")
+
+    summary_path = compare_dir / "summary.md"
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    print(f"Wrote {summary_path}")
 
 
 def render_sweep(output_dir: Path) -> None:
@@ -478,11 +547,14 @@ def render_calibration(output_dir: Path, mode: str, reference_path: Path | None 
             f"- Attack time: {analysis.attack_time_s:.3f} s",
             f"- Attack ratio first/sustain: {metrics['attack_ratio']:.6f}",
             f"- Mostly sinusoidal: {'yes' if metrics['mostly_sinusoidal'] else 'no'}",
+            f"- Output mode: {params.output_mode}",
             f"- Output source: {params.output_source}",
+            f"- Radiation enabled: {'yes' if params.radiation_enabled else 'no'}",
             f"- Radiation high-pass: {params.radiation_highpass_hz:.1f} Hz",
             f"- Radiation differentiation mix: {params.radiation_differentiation_mix:.3f}",
             f"- Body resonance: {params.body_resonance_frequency_hz:.1f} Hz, Q={params.body_resonance_q:.2f}, gain={params.body_resonance_gain:.3f}",
-            f"- Flow-noise amount: {params.flow_noise_amount:.4f}",
+            f"- Noise gain: {params.flow_noise_amount:.4f}",
+            f"- Noise flow power: {params.flow_noise_power:.3f}",
             f"- Chamber volume: {params.chamber_volume_m3:.9e} m^3",
             f"- Chamber leakage conductance for radiation: {params.chamber_leakage_conductance_m3_s_pa:.9e} m^3/(s Pa)",
             f"- Vocal tract: {params.vocal_tract_frequency_hz:.1f} Hz, Q={params.vocal_tract_q:.2f}, coupling={params.vocal_tract_impedance_pa_s_m3:.3e}",
@@ -551,8 +623,17 @@ def main() -> None:
     )
     parser.add_argument("--sweep", action="store_true", help="render Milestone 3D parameter candidates")
     parser.add_argument("--calibrate", action="store_true", help="run Milestone 5 physical calibration search")
+    parser.add_argument("--output-compare", action="store_true", help="render pressure, flow, and mixed output-layer variants")
     parser.add_argument("--analyze-reference", type=Path, default=None, help="analyze a reference WAV without using it as a synthesis source")
     parser.add_argument("--compare-reference", type=Path, default=None, help="compare rendered output or calibration candidates against a reference WAV")
+    parser.add_argument(
+        "--output",
+        choices=("pressure", "flow", "mixed"),
+        default="mixed",
+        help="select the physical output/radiation source",
+    )
+    parser.add_argument("--noise", type=float, default=None, help="flow-driven output noise gain")
+    parser.add_argument("--radiation", choices=("on", "off"), default=None, help="enable or bypass radiation high-pass/body filtering")
     parser.add_argument("--attack", type=float, default=None, help="breath attack time in seconds")
     parser.add_argument("--pre-delay", type=float, default=None, help="quiet delay before breath pressure starts")
     parser.add_argument("--release", type=float, default=None, help="breath release time in seconds")
@@ -574,8 +655,8 @@ def main() -> None:
         render_sweep(output_dir)
     else:
         config = RenderConfig(duration_s=args.duration, sample_rate_hz=44_100)
-        if args.mode == "both":
-            draw_params = _params_with_breath_controls(
+        draw_params = _params_with_output_controls(
+            _params_with_breath_controls(
                 _preset_for_mode("draw"),
                 mode="draw",
                 duration_s=args.duration,
@@ -583,8 +664,13 @@ def main() -> None:
                 attack_s=args.attack,
                 release_s=args.release,
                 pressure_pa=args.pressure,
-            )
-            blow_params = _params_with_breath_controls(
+            ),
+            output_mode=args.output,
+            noise_gain=args.noise,
+            radiation=args.radiation,
+        )
+        blow_params = _params_with_output_controls(
+            _params_with_breath_controls(
                 _preset_for_mode("blow"),
                 mode="blow",
                 duration_s=args.duration,
@@ -592,20 +678,19 @@ def main() -> None:
                 attack_s=args.attack,
                 release_s=args.release,
                 pressure_pa=args.pressure,
-            )
+            ),
+            output_mode=args.output,
+            noise_gain=args.noise,
+            radiation=args.radiation,
+        )
+        if args.output_compare:
+            render_output_compare(output_dir, args.mode, draw_params, blow_params, config)
+        elif args.mode == "both":
             render_both(output_dir, draw_params, blow_params, config)
             if args.compare_reference is not None:
                 compare_render_to_reference(output_dir, render_note("draw", draw_params, config), args.compare_reference)
         else:
-            params = _params_with_breath_controls(
-                _preset_for_mode(args.mode),
-                mode=args.mode,
-                duration_s=args.duration,
-                pre_delay_s=args.pre_delay,
-                attack_s=args.attack,
-                release_s=args.release,
-                pressure_pa=args.pressure,
-            )
+            params = draw_params if args.mode == "draw" else blow_params
             result = render_mode_outputs(output_dir, args.mode, params, config)
             if args.compare_reference is not None:
                 compare_render_to_reference(output_dir, result, args.compare_reference)

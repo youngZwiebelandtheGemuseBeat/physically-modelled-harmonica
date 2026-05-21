@@ -127,7 +127,28 @@
 - [ ] Do not use fake pitch shifting.
 - [ ] Render a short bend demonstration.
 
-## Milestone 6: Professor Demo Package
+## Milestone 6: Audible Radiation / Output Stage
+
+- [x] Audit the current audio output path.
+- [x] Document whether output uses `p_c`, `p_t`, `Q_b`, `Q_d`, `Q_b - Q_d`,
+      and reed displacement in `outputs/output_path_audit.md`.
+- [x] Add `--output pressure`.
+- [x] Add `--output flow`.
+- [x] Add `--output mixed`.
+- [x] Add physically motivated radiation high-pass / differentiating tendency
+      controls.
+- [x] Add broad body/cover resonance coloration in the radiation layer.
+- [x] Add flow-driven turbulent noise only in the output/radiation layer.
+- [x] Add CLI `--noise`.
+- [x] Add CLI `--radiation on|off`.
+- [x] Add `python run.py --output-compare`.
+- [x] Write comparison WAVs under `outputs/output_compare/`.
+- [x] Include output mode, radiation settings, noise gain, harmonic energy
+      ratio, spectral centroid, spectral rolloff, and attack ratio in reports.
+- [x] Keep the core ODE proposal equations intact.
+- [x] Keep `pytest` passing.
+
+## Milestone 7: Professor Demo Package
 
 - [ ] Create final WAV set.
 - [ ] Create final diagnostic plots.

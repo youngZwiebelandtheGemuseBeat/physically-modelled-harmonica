@@ -8,13 +8,15 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from harmonica_model.diagnostics import diagnostic_metrics, write_diagnostic_report
 from harmonica_model.params import BLOW_PARAMS, DEFAULT_PARAMS, DRAW_PARAMS, RenderConfig
 from harmonica_model.render import render_draw_note, render_note
-from run import render_both, render_mode_outputs
+from run import render_both, render_mode_outputs, render_output_compare
 
 
 def test_render_smoke_produces_non_silent_audio() -> None:
@@ -62,6 +64,18 @@ def test_both_mode_runs_and_writes_comparison_outputs(tmp_path: Path) -> None:
     assert (tmp_path / "blow_note.wav").exists()
     assert (tmp_path / "comparison_report.md").exists()
     assert (tmp_path / "comparison_diagnostics.png").exists()
+
+
+def test_output_compare_writes_pressure_flow_and_mixed_outputs(tmp_path: Path) -> None:
+    config = RenderConfig(duration_s=0.12, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    render_output_compare(tmp_path, "draw", DRAW_PARAMS, BLOW_PARAMS, config)
+
+    compare_dir = tmp_path / "output_compare"
+    assert (compare_dir / "draw_pressure.wav").exists()
+    assert (compare_dir / "draw_flow.wav").exists()
+    assert (compare_dir / "draw_mixed.wav").exists()
+    assert (compare_dir / "summary.md").exists()
 
 
 def test_draw_and_blow_outputs_are_not_identical() -> None:

@@ -41,3 +41,23 @@ def test_flow_noise_path_remains_flow_driven_and_finite() -> None:
     assert np.all(np.isfinite(result.audio))
     assert float(np.max(np.abs(result.audio))) > 1.0e-4
     assert float(np.max(np.abs(result.q_b)) + np.max(np.abs(result.q_d))) > 1.0e-9
+
+
+def test_output_modes_are_selectable_and_distinct() -> None:
+    config = RenderConfig(duration_s=0.35, sample_rate_hz=8_000, max_step_s=1.0 / 4_000.0)
+
+    pressure = render_draw_note(replace(DEFAULT_PARAMS, output_mode="pressure", flow_noise_amount=0.0), config)
+    flow = render_draw_note(replace(DEFAULT_PARAMS, output_mode="flow", flow_noise_amount=0.0), config)
+    mixed = render_draw_note(replace(DEFAULT_PARAMS, output_mode="mixed", flow_noise_amount=0.0), config)
+
+    assert pressure.params.output_mode == "pressure"
+    assert flow.params.output_mode == "flow"
+    assert mixed.params.output_mode == "mixed"
+    assert np.all(np.isfinite(pressure.audio))
+    assert np.all(np.isfinite(flow.audio))
+    assert np.all(np.isfinite(mixed.audio))
+    assert float(np.max(np.abs(pressure.audio))) > 1.0e-4
+    assert float(np.max(np.abs(flow.audio))) > 1.0e-4
+    assert float(np.max(np.abs(mixed.audio))) > 1.0e-4
+    assert not np.allclose(pressure.audio, flow.audio)
+    assert not np.allclose(pressure.audio, mixed.audio)

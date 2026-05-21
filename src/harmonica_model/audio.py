@@ -47,11 +47,15 @@ def physical_output_signal(
     p_t = np.asarray(p_t, dtype=float)
     q_b = np.asarray(q_b, dtype=float)
     q_d = np.asarray(q_d, dtype=float)
-    delta_p_b = np.asarray(delta_p_b, dtype=float)
-    delta_p_d = np.asarray(delta_p_d, dtype=float)
-
     leak_flow = params.chamber_leakage_conductance_m3_s_pa * p_c
     net_flow = q_b - q_d - leak_flow
+    flow_gain = params.acoustic_flow_gain_pa_s_m3
+    if flow_gain == 0.0:
+        flow_gain = max(
+            abs(params.draw_flow_output_gain_pa_s_m3),
+            abs(params.blow_flow_output_gain_pa_s_m3),
+            1.0e7,
+        )
     mixed = (
         params.chamber_pressure_output_gain * p_c
         + params.pressure_output_gain * p_t
@@ -60,29 +64,37 @@ def physical_output_signal(
         + params.blow_flow_output_gain_pa_s_m3 * q_b
     )
 
-    source = params.output_source
-    if source == "chamber_pressure":
+    output_mode = params.output_mode
+    if output_mode == "pressure":
         raw = p_c
-    elif source == "tract_pressure":
-        raw = p_t
-    elif source == "net_flow":
-        raw = params.acoustic_flow_gain_pa_s_m3 * net_flow
-    elif source == "draw_flow":
-        raw = params.draw_flow_output_gain_pa_s_m3 * q_d
-    elif source == "blow_flow":
-        raw = params.blow_flow_output_gain_pa_s_m3 * q_b
-    elif source == "mix":
+    elif output_mode == "flow":
+        raw = flow_gain * net_flow
+    elif output_mode == "mixed":
         raw = mixed
     else:
-        raise ValueError(f"unsupported output_source: {source}")
+        source = params.output_source
+        if source == "chamber_pressure":
+            raw = p_c
+        elif source == "tract_pressure":
+            raw = p_t
+        elif source == "net_flow":
+            raw = flow_gain * net_flow
+        elif source == "draw_flow":
+            raw = params.draw_flow_output_gain_pa_s_m3 * q_d
+        elif source == "blow_flow":
+            raw = params.blow_flow_output_gain_pa_s_m3 * q_b
+        elif source == "mix":
+            raw = mixed
+        else:
+            raise ValueError(f"unsupported output mode/source: {output_mode}/{source}")
 
     radiated = np.asarray(raw, dtype=float)
-    if params.radiation_highpass_hz > 0.0 and radiated.size > 8:
+    if params.radiation_enabled and params.radiation_highpass_hz > 0.0 and radiated.size > 8:
         cutoff = min(params.radiation_highpass_hz, sample_rate_hz * 0.45)
         sos = signal.butter(1, cutoff, btype="highpass", fs=sample_rate_hz, output="sos")
         radiated = signal.sosfilt(sos, radiated)
 
-    diff_mix = float(np.clip(params.radiation_differentiation_mix, 0.0, 1.0))
+    diff_mix = float(np.clip(params.radiation_differentiation_mix if params.radiation_enabled else 0.0, 0.0, 1.0))
     if diff_mix > 0.0 and radiated.size > 1:
         differentiated = np.gradient(radiated) * float(sample_rate_hz)
         diff_peak = float(np.max(np.abs(differentiated)))
@@ -92,7 +104,8 @@ def physical_output_signal(
             radiated = (1.0 - diff_mix) * radiated + diff_mix * differentiated
 
     if (
-        params.body_resonance_gain > 0.0
+        params.radiation_enabled
+        and params.body_resonance_gain > 0.0
         and params.body_resonance_frequency_hz > 0.0
         and params.body_resonance_q > 0.0
         and radiated.size > 8
@@ -113,13 +126,11 @@ def physical_output_signal(
             noise_sos = signal.butter(1, high_hz, btype="highpass", fs=sample_rate_hz, output="sos")
             turbulent_noise = signal.sosfilt(noise_sos, white)
         flow_scale = np.abs(q_b) + np.abs(q_d)
-        pressure_scale = np.sqrt(np.maximum(np.abs(delta_p_b) + np.abs(delta_p_d), 0.0))
-        drive = flow_scale * pressure_scale
-        drive_peak = float(np.max(drive))
+        drive_peak = float(np.max(flow_scale))
         signal_peak = float(np.max(np.abs(radiated)))
         noise_peak = float(np.max(np.abs(turbulent_noise)))
         if drive_peak > 0.0 and signal_peak > 0.0 and noise_peak > 0.0:
-            envelope = drive / drive_peak
+            envelope = (flow_scale / drive_peak) ** max(float(params.flow_noise_power), 0.0)
             turbulent_noise = turbulent_noise / noise_peak
             radiated = radiated + params.flow_noise_amount * signal_peak * envelope * turbulent_noise
 

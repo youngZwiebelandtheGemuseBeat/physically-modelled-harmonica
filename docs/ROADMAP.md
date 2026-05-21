@@ -232,7 +232,51 @@ parameters.
 Acceptance: render a short sweep where pitch and timbre change because of tract
 parameters.
 
-## Milestone 6: Professor Demo Package
+## Milestone 6: Audible Radiation / Output Stage
+
+Status: Done. First selectable output implementation is available.
+
+Milestone 6 keeps the proposal ODE intact and improves the audible path after
+integration:
+
+- output path audit written to `outputs/output_path_audit.md`
+- selectable `--output pressure`, `--output flow`, and `--output mixed`
+- explicit `--radiation on|off` control for high-pass/differentiating radiation
+  tendency and broad body/cover coloration
+- CLI `--noise` control for subtle flow-driven turbulent output noise
+- `python run.py --output-compare` writes pressure/flow/mixed WAVs and reports
+  under `outputs/output_compare/`
+- render reports include output mode, radiation settings, noise gain, harmonic
+  energy ratio, spectral centroid, spectral rolloff, and attack ratio
+
+Physical boundary:
+
+- pressure mode uses simulated chamber pressure `p_c`
+- flow mode uses scaled simulated net flow `Q_b - Q_d`
+- mixed mode combines simulated pressure and flow states
+- reed displacement is not mixed directly into audio
+- noise is injected only into the output/radiation layer and is driven by
+  simulated flow magnitude
+- no samples, wavetables, sawtooth/filter fake synthesis, pitch shifting, ML,
+  realtime audio, GUI, or C++ are introduced
+
+Commands:
+
+```text
+python run.py --mode draw --output pressure
+python run.py --mode draw --output flow
+python run.py --mode draw --output mixed
+python run.py --mode both --output mixed
+python run.py --mode draw --noise 0.02
+python run.py --mode draw --radiation on
+python run.py --output-compare
+```
+
+Acceptance: pressure, flow, and mixed renders are audibly different because the
+radiation source and filters differ, while the internal physical model remains
+the same.
+
+## Milestone 7: Professor Demo Package
 
 Create final WAVs, plots, CSV traces, and a short explanation connecting
 implementation to the proposal equations.
