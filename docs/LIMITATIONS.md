@@ -22,3 +22,7 @@ would be refining the opening and crossing behavior, contact/loss assumptions,
 or a better documented acoustic load while keeping the solved model as the
 source.
 
+The current reduced vocal-tract state is simulated as a resonant pressure state
+driven by net flow. In the current seminar-core version it is not yet used as a
+feedback pressure in the reed pressure drops. A later source-aligned improvement
+would be to couple it back as a mouth-side acoustic load.

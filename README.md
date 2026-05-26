@@ -13,7 +13,8 @@ no samples, no wavetable synthesis, and no pitch shifting.
 python run.py --mode draw
 python run.py --mode blow
 python run.py --mode both
-python run.py --mode both --motion-flow on --output-dir outputs_motion_flow_off
+python run.py --mode both --motion-flow off --output-dir outputs_motion_flow_off
+python run.py --mode both --motion-flow on --output-dir outputs_motion_flow_on
 ```
 
 Optional simple controls:
@@ -48,4 +49,4 @@ external radiation model.
 - `docs/MODEL_EQUATIONS.md` lists the implemented equations.
 - `docs/SOURCE_MAPPING.md` maps equations and functions to proposal source categories.
 - `docs/LIMITATIONS.md` states what is deliberately excluded.
-- `docs/MINIMAL_DEFENSE_GUIDE.md` gives a concise explanation for seminar discussion.
+- `docs/IMPLEMENTATION_OVERVIEW.md` explains the implementation structure.
