@@ -225,3 +225,7 @@ outputs/
 .DS_Store
 .codex/
 .TODO.md
+
+# never commit any output directories or source documents
+output/
+sources/
