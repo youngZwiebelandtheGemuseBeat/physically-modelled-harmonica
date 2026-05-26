@@ -1,47 +1,44 @@
-# physically-modelled-harmonica
-Physical modeling of one channel of a diatonic harmonica.
+# Physically Modelled Harmonica
 
-This is an offline Python prototype. It renders audio from the coupled reed,
-Bernoulli flow, chamber pressure, and reduced vocal-tract equations; it does
-not use samples, wavetables, fake saw/filter synthesis, pitch shifting, machine
-learning, bend demonstrations, realtime audio, a GUI, or C++.
+This is an offline reduced physical model of one diatonic harmonica channel for
+a class project.
 
-For a defense-oriented map of the important files and model workflow, read
-`docs/CODE_WALKTHROUGH.md`.
+The implementation solves a seven-state ODE containing blow reed motion, draw
+reed motion, chamber pressure, and a reduced vocal-tract pressure state. It uses
+no samples, no wavetable synthesis, and no pitch shifting.
 
-## Render Modes
+## Run
 
-```text
+```bash
 python run.py --mode draw
 python run.py --mode blow
 python run.py --mode both
 ```
 
-`python run.py` defaults to `--mode draw`.
+Optional simple controls:
 
-Outputs:
-
-- `outputs/draw_note.wav`
-- `outputs/draw_note_trace.csv`
-- `outputs/draw_note_diagnostics.png`
-- `outputs/draw_note_report.md`
-- `outputs/blow_note.wav`
-- `outputs/blow_note_trace.csv`
-- `outputs/blow_note_diagnostics.png`
-- `outputs/blow_note_report.md`
-- `outputs/comparison_report.md`
-- `outputs/comparison_diagnostics.png`
-
-## Pressure Sign Convention
-
-Positive mouth pressure means the player blows into the channel. Negative mouth
-pressure means draw suction at the mouth side. The implemented pressure drops
-are:
-
-```text
-DeltaP_b = p_m - p_c
-DeltaP_d = p_c - p_out
+```bash
+python run.py --mode draw --duration 1.5 --pressure 750 --attack 0.2 --motion-flow off
 ```
 
-The draw preset uses negative `p_m` and is expected to be draw-reed dominant.
-The blow preset uses positive `p_m` and is expected to be blow-reed dominant.
+## Outputs
+
+The commands write:
+
+- `outputs/draw_pressure.wav`
+- `outputs/draw_trace.csv`
+- `outputs/draw_validation.png`
+- `outputs/blow_pressure.wav`
+- `outputs/blow_trace.csv`
+- `outputs/blow_validation.png`
+
+The WAV is normalized chamber pressure from the solved physical model, not an
+external radiation model.
+
+## Documentation
+
+- `docs/MODEL_EQUATIONS.md` lists the implemented equations.
+- `docs/SOURCE_MAPPING.md` maps equations and functions to proposal source categories.
+- `docs/LIMITATIONS.md` states what is deliberately excluded.
+- `docs/MINIMAL_DEFENSE_GUIDE.md` gives a concise explanation for seminar discussion.
+

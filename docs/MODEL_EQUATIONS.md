@@ -1,124 +1,75 @@
 # Model Equations
 
-This project is a Python offline physical modelling prototype of one channel of
-a diatonic harmonica. The implementation must stay tied to the proposal
-equations below.
+This implementation solves one reduced diatonic harmonica channel with the
+state vector
 
-Milestone 1 produced a stable render pipeline and a non-silent sound. That sound
-is not expected to be recognizably harmonica-like yet, because a single mostly
-linear reed oscillator produces a sine-like tone. The harmonica identity must
-come from the full coupled physical model:
+`[x_b, v_b, x_d, v_d, p_c, p_t, v_t]`.
 
-1. blow and draw reeds as damped oscillators
-2. Bernoulli-based nonlinear airflow through reed openings
-3. chamber pressure feedback
-4. reduced vocal-tract/acoustic load
-5. physically derived output from chamber pressure and/or flow
+`x_b, v_b` are blow reed displacement and velocity. `x_d, v_d` are draw reed
+displacement and velocity. `p_c` is chamber pressure. `p_t, v_t` are the
+reduced vocal-tract pressure state and its derivative.
 
-## State Vector
+## Implemented Equations
 
-Milestone 2 must implement the full proposal state vector:
+1. Reed dynamics
 
-```text
-y = [x_b, v_b, x_d, v_d, p_c, p_t, v_t]
-```
+   `m_i x_i'' + r_i x_i' + k_i x_i = F_i`
 
-where `x_b` and `x_d` are blow and draw reed displacements, `v_b` and `v_d`
-are reed velocities, `p_c` is chamber pressure, `p_t` is reduced vocal-tract
-pressure, and `v_t = p_t'`.
+   Implemented in `harmonica_minimal.equations.state_derivative`.
 
-## Reed Dynamics
+2. Blow reed force
 
-For each reed `i`:
+   `F_b = S_b (p_m - p_c)`
 
-```text
-m_i x_i'' + r_i x_i' + k_i x_i = F_air
-```
+   Implemented in `harmonica_minimal.equations.blow_reed_force`.
 
-Use this as a damped mass-spring oscillator with pressure-driven forcing.
+3. Draw reed force
 
-## Pressure Forces
+   `F_d = S_d (p_c - p_out)`
 
-Blow reed force:
+   Implemented in `harmonica_minimal.equations.draw_reed_force`.
 
-```text
-F_b = S_b (p_m - p_c)
-```
+4. Reed opening
 
-Draw reed force:
+   `A_i(x_i) = W_i max(0, h_i0 + alpha_i x_i)`
 
-```text
-F_d = S_d (p_c - p_out)
-```
+   Implemented in `harmonica_minimal.equations.reed_gap` and
+   `harmonica_minimal.equations.opening_area`.
 
-## Bernoulli Airflow
+5. Bernoulli/orifice gap flow
 
-Blow-side flow:
+   `Q_gap,i = C_i A_i(x_i) sign(Delta p_i) sqrt(2 abs(Delta p_i) / rho)`
 
-```text
-Q_b = C_b A_b(x_b) sgn(p_m - p_c) sqrt(2 |p_m - p_c| / rho)
-```
+   Implemented in `harmonica_minimal.equations.bernoulli_gap_flow`.
 
-Draw-side flow:
+6. Optional moving-reed flow
 
-```text
-Q_d = C_d A_d(x_d) sgn(p_c - p_out) sqrt(2 |p_c - p_out| / rho)
-```
+   `Q_motion,i = S_motion,i hdot_i`
 
-`A_b(x_b)` and `A_d(x_d)` are physical reed opening functions. Milestone 3B uses
-the explicit form:
+   `hdot_i` is approximated as `alpha_i x_i'`, the derivative of the linear gap
+   law. Implemented in `harmonica_minimal.equations.motion_flow`. It is off by
+   default and switchable with `--motion-flow on/off`.
 
-```text
-A_b = max(A_min, W_b max(0, h_b0 + sigma_b x_b))
-A_d = max(A_min, W_d max(0, h_d0 + sigma_d x_d))
-```
+7. Total reed flow
 
-The sign of `sigma_i` defines whether positive displacement opens or closes the
-slot. Rest openings, closure clipping, and documented closure damping are
-allowed as physical reed-slot approximations, but they must not become fake
-synthesis sources.
+   `Q_i = Q_gap,i + Q_motion,i`
 
-## Chamber Pressure
+   Implemented in `harmonica_minimal.equations.total_reed_flow`.
 
-```text
-p_c' = rho c^2 / V_c * (Q_b - Q_d)
-```
+8. Chamber pressure
 
-The chamber pressure must feed back into reed forces and the flow equations.
-The implementation keeps this proposal term explicit and adds one documented
-loss extension:
+   `p_c' = rho c^2 / V_c (Q_b - Q_d)`
 
-```text
-Q_loss = G_c p_c
-p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)
-```
+   Implemented in `harmonica_minimal.equations.chamber_pressure_derivative`.
 
-`G_c` is small and pressure-proportional. It represents unresolved chamber,
-slot, cover-plate, and radiation losses so the chamber is not an ideal sealed
-lossless compliance during note release. Setting `G_c = 0` recovers the proposal
-equation exactly.
+9. Reduced vocal-tract resonator
 
-## Acoustic Load
+   `p_t'' + (omega_t / Q_t) p_t' + omega_t^2 p_t = omega_t^2 Z_t (Q_b - Q_d)`
 
-Impedance definition:
+   Implemented in `harmonica_minimal.equations.state_derivative`.
 
-```text
-Z(omega) = P(omega) / Q(omega)
-```
+## Output
 
-Reduced vocal-tract resonator:
+The WAV is normalized chamber pressure from the solved physical model, not an
+external radiation model.
 
-```text
-p_t'' + (omega_t / Q_t) p_t' + omega_t^2 p_t
-= omega_t^2 Z_t (Q_b - Q_d)
-```
-
-The tract state is a reduced acoustic load, not a separate synthetic oscillator
-used to fake timbre.
-
-## Output Signal
-
-The rendered audio must be physically derived from simulated chamber pressure
-and/or flow, for example `p_c`, `Q_b`, `Q_d`, `p_t`, or a weighted physical
-combination. It must not use samples, wavetables, sawtooth/filter fake harmonica
-synthesis, pitch shifting, bend demonstrations, or machine learning.
