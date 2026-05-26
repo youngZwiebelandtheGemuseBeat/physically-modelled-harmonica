@@ -22,7 +22,8 @@ STATE_SIZE = 7
 
 @dataclass(frozen=True)
 class DerivedState:
-    p_m: float
+    p_m_static: float
+    p_m_effective: float
     gap_b: float
     gap_d: float
     area_b: float
@@ -54,6 +55,18 @@ def smooth_breath_pressure(t_s: float, duration_s: float, params: ModelParameter
     else:
         envelope = 1.0
     return params.mouth_pressure_pa * envelope
+
+
+def effective_mouth_pressure(p_m_static_pa: float, p_t_pa: float, params: ModelParameters) -> float:
+    """Mouth-side pressure after reduced vocal-tract loading."""
+
+    return p_m_static_pa - params.vocal_tract_feedback_gain * p_t_pa
+
+
+def blow_pressure_drop(p_m_effective_pa: float, p_c_pa: float) -> float:
+    """Blow-side pressure drop using the loaded mouth-side pressure."""
+
+    return p_m_effective_pa - p_c_pa
 
 
 def reed_gap(displacement_m: float, reed: ReedParameters) -> float:
@@ -97,10 +110,10 @@ def total_reed_flow(q_gap_m3_s: float, q_motion_m3_s: float) -> float:
     return q_gap_m3_s + q_motion_m3_s
 
 
-def blow_reed_force(p_m_pa: float, p_c_pa: float, params: ModelParameters) -> float:
-    """Blow reed force F_b = S_b (p_m - p_c)."""
+def blow_reed_force(p_m_effective_pa: float, p_c_pa: float, params: ModelParameters) -> float:
+    """Blow reed force F_b = S_b (p_m_effective - p_c)."""
 
-    return params.blow_reed.pressure_area_m2 * (p_m_pa - p_c_pa)
+    return params.blow_reed.pressure_area_m2 * blow_pressure_drop(p_m_effective_pa, p_c_pa)
 
 
 def draw_reed_force(p_c_pa: float, params: ModelParameters) -> float:
@@ -124,15 +137,16 @@ def chamber_pressure_derivative(q_b_total_m3_s: float, q_d_total_m3_s: float, pa
 def derived_state(t_s: float, duration_s: float, state: np.ndarray, params: ModelParameters) -> DerivedState:
     """Compute pressures, gaps, flows, and forces from one ODE state."""
 
-    x_b, v_b, x_d, v_d, p_c, _p_t, _v_t = state
-    p_m = smooth_breath_pressure(t_s, duration_s, params)
+    x_b, v_b, x_d, v_d, p_c, p_t, _v_t = state
+    p_m_static = smooth_breath_pressure(t_s, duration_s, params)
+    p_m_effective = effective_mouth_pressure(p_m_static, float(p_t), params)
 
     gap_b = reed_gap(float(x_b), params.blow_reed)
     gap_d = reed_gap(float(x_d), params.draw_reed)
     area_b = opening_area(float(x_b), params.blow_reed)
     area_d = opening_area(float(x_d), params.draw_reed)
 
-    delta_p_b = p_m - float(p_c)
+    delta_p_b = blow_pressure_drop(p_m_effective, float(p_c))
     delta_p_d = float(p_c) - params.p_out_pa
 
     q_b_gap = bernoulli_gap_flow(
@@ -152,12 +166,13 @@ def derived_state(t_s: float, duration_s: float, state: np.ndarray, params: Mode
     q_b_total = total_reed_flow(q_b_gap, q_b_motion)
     q_d_total = total_reed_flow(q_d_gap, q_d_motion)
 
-    force_b = blow_reed_force(p_m, float(p_c), params)
+    force_b = blow_reed_force(p_m_effective, float(p_c), params)
     force_d = draw_reed_force(float(p_c), params)
     dp_c = chamber_pressure_derivative(q_b_total, q_d_total, params)
 
     return DerivedState(
-        p_m=p_m,
+        p_m_static=p_m_static,
+        p_m_effective=p_m_effective,
         gap_b=gap_b,
         gap_d=gap_d,
         area_b=area_b,
@@ -205,4 +220,3 @@ def state_derivative(t_s: float, state: np.ndarray, duration_s: float, params: M
     )
 
     return np.array([dx_b, dv_b, dx_d, dv_d, values.dp_c, dp_t, dv_t], dtype=float)
-

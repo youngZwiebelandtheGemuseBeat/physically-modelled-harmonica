@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from harmonica_minimal.parameters import SimulationConfig
+from harmonica_minimal.output import write_trace_csv
 from harmonica_minimal.simulate import simulate_note
 
 
@@ -47,3 +49,16 @@ def test_trace_arrays_have_no_nan_or_inf() -> None:
     for array in arrays:
         assert np.all(np.isfinite(array))
 
+
+def test_effective_mouth_pressure_appears_in_trace_output(tmp_path: Path) -> None:
+    config = SimulationConfig(duration_s=0.04, sample_rate_hz=4_000, max_step_s=1.0 / 4_000.0)
+    result = simulate_note("draw", config=config, vocal_tract_feedback_gain=0.0)
+    trace_path = tmp_path / "trace.csv"
+
+    write_trace_csv(trace_path, result)
+
+    with trace_path.open(newline="") as handle:
+        header = next(csv.reader(handle))
+    assert "p_m_static" in header
+    assert "p_m_effective" in header
+    assert "vocal_tract_feedback_gain" in header

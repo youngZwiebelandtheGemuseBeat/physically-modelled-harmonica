@@ -18,7 +18,10 @@ TRACE_COLUMNS = [
     "x_d",
     "v_d",
     "p_c",
+    "p_m_static",
     "p_t",
+    "p_m_effective",
+    "vocal_tract_feedback_gain",
     "v_t",
     "gap_b",
     "gap_d",
@@ -69,7 +72,10 @@ def write_trace_csv(path: Path, result: SimulationResult) -> None:
         result.x_d,
         result.v_d,
         result.p_c,
+        result.p_m_static,
         result.p_t,
+        result.p_m_effective,
+        np.full_like(result.time_s, result.params.vocal_tract_feedback_gain, dtype=float),
         result.v_t,
         result.gap_b,
         result.gap_d,
@@ -142,6 +148,8 @@ def diagnostics_text(result: SimulationResult) -> str:
     start = min(max(0, int(0.35 * result.sample_rate_hz)), max(0, len(result.time_s) - 1))
     stop = min(len(result.time_s), max(start + 1, int(0.90 * len(result.time_s))))
     p_window = result.p_c[start:stop]
+    p_t_window = result.p_t[start:stop]
+    load_window = result.p_m_effective[start:stop] - result.p_m_static[start:stop]
     active_window = active[start:stop]
     passive_window = passive[start:stop]
 
@@ -149,6 +157,8 @@ def diagnostics_text(result: SimulationResult) -> str:
     active_rms = float(np.sqrt(np.mean(active_window * active_window)))
     passive_rms = float(np.sqrt(np.mean(passive_window * passive_window)))
     pressure_rms = float(np.sqrt(np.mean(p_window * p_window)))
+    p_t_rms = float(np.sqrt(np.mean(p_t_window * p_t_window)))
+    load_rms = float(np.sqrt(np.mean(load_window * load_window)))
     pressure_peak = float(np.max(np.abs(p_window))) if p_window.size else 0.0
     crest = pressure_peak / pressure_rms if pressure_rms > 0.0 else 0.0
 
@@ -169,6 +179,10 @@ def diagnostics_text(result: SimulationResult) -> str:
         f"mode: {result.mode}",
         f"estimated fundamental frequency: {f0:.2f} Hz",
         f"active reed estimate: {active_name}",
+        f"tract load enabled: {'yes' if result.params.vocal_tract_feedback_gain != 0.0 else 'no'}",
+        f"vocal_tract_feedback_gain: {result.params.vocal_tract_feedback_gain:.6g}",
+        f"RMS p_t: {p_t_rms:.6g} Pa",
+        f"RMS p_m_effective - p_m_static: {load_rms:.6g} Pa",
         f"active/passive RMS displacement ratio: {active_rms / passive_rms if passive_rms > 0.0 else 0.0:.3f}",
         f"chamber pressure RMS: {pressure_rms:.6g} Pa",
         f"chamber pressure crest factor: {crest:.3f}",

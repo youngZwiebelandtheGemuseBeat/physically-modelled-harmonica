@@ -48,7 +48,7 @@ Supports the state-space formulation and conversion of second-order oscillator e
 ### Implemented equations
 
 $$
-F_b = S_b(p_m - p_c)
+F_b = S_b(p_{m,\mathrm{effective}} - p_c)
 $$
 
 $$
@@ -57,6 +57,8 @@ $$
 
 ### Code
 
+- `harmonica_minimal.equations.effective_mouth_pressure`
+- `harmonica_minimal.equations.blow_pressure_drop`
 - `harmonica_minimal.equations.blow_reed_force`
 - `harmonica_minimal.equations.draw_reed_force`
 
@@ -110,8 +112,8 @@ This is a modeling simplification.
 $$
 Q_b =
 C_b A_b(x_b)
-\operatorname{sgn}(p_m - p_c)
-\sqrt{\frac{2|p_m - p_c|}{\rho}}
+\operatorname{sgn}(p_{m,\mathrm{effective}} - p_c)
+\sqrt{\frac{2|p_{m,\mathrm{effective}} - p_c|}{\rho}}
 $$
 
 $$
@@ -214,6 +216,7 @@ $$
 ### Code
 
 - `harmonica_minimal.equations.state_derivative`
+- `harmonica_minimal.equations.effective_mouth_pressure`
 
 ### Proposal location
 
@@ -229,6 +232,32 @@ Motivates vocal-tract resonances and acoustic loading in musical instrument perf
 **Egbert et al. (2013)**
 
 Motivates the relevance of vocal-tract geometry and tongue configuration in harmonica pitch bending.
+
+### Implemented coupling term
+
+The state $p_t$ is the reduced vocal-tract pressure state. The static breath
+source is denoted $p_{m,\mathrm{static}}$. The mouth-side pressure after reduced
+tract loading is:
+
+$$
+p_{m,\mathrm{effective}} = p_{m,\mathrm{static}} - \eta_t p_t
+$$
+
+The parameter $\eta_t$ is implemented as `vocal_tract_feedback_gain`.
+$p_{m,\mathrm{effective}}$ is used in the blow-side pressure drop and blow-reed
+force:
+
+$$
+\Delta p_b = p_{m,\mathrm{effective}} - p_c
+$$
+
+$$
+F_b = S_b(p_{m,\mathrm{effective}} - p_c)
+$$
+
+The draw-side pressure law remains $p_c - p_{\mathrm{out}}$. Setting
+$\eta_t=0$ recovers the previous one-way tract state behavior. This is still a
+reduced lumped acoustic load, not a full vocal-tract geometry simulation.
 
 ## 8. Numerical simulation
 

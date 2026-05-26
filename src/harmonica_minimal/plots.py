@@ -113,16 +113,19 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
     pressure_band = freqs_p <= 4000.0
 
     motion_status = "on" if result.params.motion_flow_enabled else "off"
+    load_status = "on" if result.params.vocal_tract_feedback_gain != 0.0 else "off"
     pressure = result.params.mouth_pressure_pa
     title = (
         f"{result.mode} validation | f0 {f0:.1f} Hz | "
-        f"motion-flow {motion_status} | mouth pressure {pressure:.0f} Pa"
+        f"tract-load {load_status} | motion-flow {motion_status} | mouth pressure {pressure:.0f} Pa"
     )
 
     colors = {
         "blow": "#2563a6",
         "draw": "#b24a3b",
         "pressure": "#27805d",
+        "mouth_static": "#6b7280",
+        "mouth_effective": "#0f766e",
         "reed_spectrum": "#7654a6",
         "pressure_spectrum": "#4d4d4d",
     }
@@ -139,10 +142,10 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
         }
     ):
         fig, axes = plt.subplots(
-            5,
+            6,
             1,
-            figsize=(8.8, 8.4),
-            gridspec_kw={"height_ratios": [1.0, 1.0, 1.0, 1.15, 1.15]},
+            figsize=(8.8, 10.0),
+            gridspec_kw={"height_ratios": [1.0, 1.0, 1.0, 1.0, 1.15, 1.15]},
             constrained_layout=True,
         )
         fig.suptitle(title, fontweight="bold")
@@ -155,26 +158,45 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
 
         axes[2].plot(time_ms, result.p_c[start:stop], color=colors["pressure"], linewidth=1.25)
         axes[2].set_ylabel("p_c\n(Pa)")
-        axes[2].set_xlabel("time in steady-state window (ms)")
 
-        for ax in axes[:3]:
+        axes[3].plot(
+            time_ms,
+            result.p_m_effective[start:stop],
+            color=colors["mouth_effective"],
+            linewidth=1.25,
+            label="p_m_effective",
+        )
+        axes[3].plot(
+            time_ms,
+            result.p_m_static[start:stop],
+            color=colors["mouth_static"],
+            linewidth=1.0,
+            linestyle="--",
+            label="p_m_static",
+        )
+        axes[3].set_ylabel("mouth pressure\n(Pa)")
+        axes[3].set_xlabel("time in steady-state window (ms)")
+        axes[3].legend(loc="upper right", frameon=False, fontsize=8)
+
+        for ax in axes[:4]:
             _style_time_axis(ax)
             ax.set_xlim(float(time_ms[0]), float(time_ms[-1]) if time_ms.size > 1 else 1.0)
         axes[0].tick_params(labelbottom=False)
         axes[1].tick_params(labelbottom=False)
-
-        axes[3].plot(freqs_reed[reed_band], spec_reed[reed_band], color=colors["reed_spectrum"], linewidth=1.1)
-        axes[3].set_ylabel("active reed\n(dB)")
-        axes[3].set_title(f"{active_label} spectrum")
-        _style_spectrum_axis(axes[3])
-        _mark_harmonics(axes[3], f0)
+        axes[2].tick_params(labelbottom=False)
 
         axes[4].plot(freqs_p[pressure_band], spec_p[pressure_band], color=colors["pressure_spectrum"], linewidth=1.1)
         axes[4].set_ylabel("p_c\n(dB)")
-        axes[4].set_xlabel("frequency (Hz)")
         axes[4].set_title("chamber pressure spectrum")
         _style_spectrum_axis(axes[4])
         _mark_harmonics(axes[4], f0)
+
+        axes[5].plot(freqs_reed[reed_band], spec_reed[reed_band], color=colors["reed_spectrum"], linewidth=1.1)
+        axes[5].set_ylabel("active reed\n(dB)")
+        axes[5].set_xlabel("frequency (Hz)")
+        axes[5].set_title(f"{active_label} spectrum")
+        _style_spectrum_axis(axes[5])
+        _mark_harmonics(axes[5], f0)
 
         fig.savefig(path)
         plt.close(fig)

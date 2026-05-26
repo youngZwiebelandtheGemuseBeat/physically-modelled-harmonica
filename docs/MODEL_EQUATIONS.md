@@ -11,6 +11,15 @@ $x_b, v_b$ are blow reed displacement and velocity. $x_d, v_d$ are draw reed
 displacement and velocity. $p_c$ is chamber pressure. $p_t, v_t$ are the
 reduced vocal-tract pressure state and its derivative.
 
+$p_{m,\mathrm{static}}$ is the imposed breath pressure envelope. The
+mouth-side pressure after reduced vocal-tract loading is:
+
+$$
+p_{m,\mathrm{effective}} = p_{m,\mathrm{static}} - \eta_t p_t
+$$
+
+where $\eta_t$ is `vocal_tract_feedback_gain`.
+
 ## Implemented Equations
 
 1. Reed dynamics
@@ -24,7 +33,7 @@ reduced vocal-tract pressure state and its derivative.
 2. Blow reed force
 
    $$
-   F_b = S_b(p_m - p_c)
+   F_b = S_b(p_{m,\mathrm{effective}} - p_c)
    $$
 
    Implemented in `harmonica_minimal.equations.blow_reed_force`.
@@ -57,6 +66,9 @@ reduced vocal-tract pressure state and its derivative.
    $$
 
    Implemented in `harmonica_minimal.equations.bernoulli_gap_flow`.
+
+   For the blow side, $\Delta p_b = p_{m,\mathrm{effective}} - p_c$.
+   For the draw side, $\Delta p_d = p_c - p_{\mathrm{out}}$.
 
 6. Optional moving-reed flow
 
@@ -97,6 +109,13 @@ reduced vocal-tract pressure state and its derivative.
    $$
 
    Implemented in `harmonica_minimal.equations.state_derivative`.
+
+   The tract pressure $p_t$ is also used in
+   $p_{m,\mathrm{effective}} = p_{m,\mathrm{static}} - \eta_t p_t$.
+   $p_{m,\mathrm{effective}}$ is used in the blow-side pressure drop and the
+   blow-reed force. Setting $\eta_t=0$ recovers the previous one-way tract
+   state behavior. This remains a reduced lumped acoustic load, not a full
+   vocal-tract geometry simulation.
 
 ## Output
 

@@ -42,7 +42,7 @@ This is a lumped reduced model. It does not simulate full three-dimensional reed
 The pressure force is modeled as a lumped pressure load acting on an effective reed surface:
 
 $$
-F_b = S_b(p_m - p_c)
+F_b = S_b(p_{m,\mathrm{effective}} - p_c)
 $$
 
 $$
@@ -54,7 +54,8 @@ where:
 - $F_b$ is the blow-reed force
 - $F_d$ is the draw-reed force
 - $S_b, S_d$ are effective pressure-loaded surfaces
-- $p_m$ is mouth pressure
+- $p_{m,\mathrm{static}}$ is the imposed breath pressure envelope
+- $p_{m,\mathrm{effective}}$ is the mouth-side pressure after reduced tract loading
 - $p_c$ is chamber pressure
 - $p_{\mathrm{out}}$ is outside pressure
 
@@ -67,8 +68,8 @@ The compact proposal model uses Bernoulli/orifice-style airflow through reed ope
 $$
 Q_b =
 C_b A_b(x_b)
-\operatorname{sgn}(p_m - p_c)
-\sqrt{\frac{2|p_m - p_c|}{\rho}}
+\operatorname{sgn}(p_{m,\mathrm{effective}} - p_c)
+\sqrt{\frac{2|p_{m,\mathrm{effective}} - p_c|}{\rho}}
 $$
 
 $$
@@ -165,7 +166,23 @@ where:
 - $Z_t$ is effective tract coupling
 - $Q_b - Q_d$ is the net flow drive
 
-This is a lumped acoustic load, not a full vocal-tract geometry model.
+The tract pressure state is also coupled back into the mouth-side pressure path:
+
+$$
+p_{m,\mathrm{effective}} = p_{m,\mathrm{static}} - \eta_t p_t
+$$
+
+where $\eta_t$ is the dimensionless `vocal_tract_feedback_gain`.
+$p_{m,\mathrm{effective}}$ is used in the blow-side pressure drop
+$p_{m,\mathrm{effective}} - p_c$ and in the blow-reed force. The draw-side
+pressure law remains $p_c - p_{\mathrm{out}}$.
+
+Setting $\eta_t=0$ recovers the previous one-way tract state behavior:
+$p_t$ is still simulated from the net flow, but it does not modify the
+mouth-side pressure used by the reed/channel system.
+
+This is a reduced lumped acoustic load, not a full vocal-tract geometry
+simulation.
 
 ## 8. Numerical simulation
 
@@ -215,7 +232,7 @@ It is not an external acoustic radiation model.
 
 ## Documentation philosophy
 
-The documentation is descriptive rather than rhetorical.
+The documentation is descriptive.
 
 Its purpose is to explain:
 
@@ -224,4 +241,4 @@ Its purpose is to explain:
 - which simplifications are used
 - which limitations remain
 
-Simplifications are stated directly instead of being rhetorically defended.
+Simplifications are stated directly.

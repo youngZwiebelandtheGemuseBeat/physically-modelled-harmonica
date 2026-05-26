@@ -37,6 +37,7 @@ class ModelParameters:
     vocal_tract_frequency_hz: float
     vocal_tract_q: float
     vocal_tract_impedance_pa_s_m3: float
+    vocal_tract_feedback_gain: float
     motion_flow_enabled: bool
 
     @property
@@ -117,6 +118,7 @@ DRAW_PARAMETERS = ModelParameters(
     vocal_tract_frequency_hz=650.0,
     vocal_tract_q=5.0,
     vocal_tract_impedance_pa_s_m3=2.0e8,
+    vocal_tract_feedback_gain=0.05,
     motion_flow_enabled=False,
 )
 

@@ -18,6 +18,8 @@ class SimulationResult:
     time_s: np.ndarray
     params: ModelParameters
     state: np.ndarray
+    p_m_static: np.ndarray
+    p_m_effective: np.ndarray
     gap_b: np.ndarray
     gap_d: np.ndarray
     delta_p_b: np.ndarray
@@ -66,6 +68,7 @@ def simulate_note(
     pressure_pa: float | None = None,
     attack_s: float | None = None,
     motion_flow_enabled: bool | None = None,
+    vocal_tract_feedback_gain: float | None = None,
 ) -> SimulationResult:
     """Solve the proposal ODE for one blow or draw note."""
 
@@ -77,6 +80,8 @@ def simulate_note(
         params = replace(params, attack_s=attack_s)
     if motion_flow_enabled is not None:
         params = replace(params, motion_flow_enabled=motion_flow_enabled)
+    if vocal_tract_feedback_gain is not None:
+        params = replace(params, vocal_tract_feedback_gain=vocal_tract_feedback_gain)
 
     sample_count = int(round(config.duration_s * config.sample_rate_hz))
     time_s = np.arange(sample_count, dtype=float) / float(config.sample_rate_hz)
@@ -104,6 +109,8 @@ def simulate_note(
         time_s=time_s,
         params=params,
         state=state,
+        p_m_static=np.array([value.p_m_static for value in derived], dtype=float),
+        p_m_effective=np.array([value.p_m_effective for value in derived], dtype=float),
         gap_b=np.array([value.gap_b for value in derived], dtype=float),
         gap_d=np.array([value.gap_d for value in derived], dtype=float),
         delta_p_b=np.array([value.delta_p_b for value in derived], dtype=float),
@@ -117,4 +124,3 @@ def simulate_note(
         force_b=np.array([value.force_b for value in derived], dtype=float),
         force_d=np.array([value.force_d for value in derived], dtype=float),
     )
-

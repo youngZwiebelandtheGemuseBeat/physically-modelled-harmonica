@@ -14,9 +14,15 @@ if str(SRC_ROOT) not in sys.path:
 
 from harmonica_minimal.equations import (
     bernoulli_gap_flow,
+    blow_pressure_drop,
+    blow_reed_force,
     chamber_pressure_derivative,
+    derived_state,
+    effective_mouth_pressure,
     motion_flow,
     opening_area,
+    P_C,
+    P_T,
     total_reed_flow,
 )
 from harmonica_minimal.parameters import DRAW_PARAMETERS
@@ -68,3 +74,40 @@ def test_motion_flow_enabled_uses_hdot() -> None:
 def test_total_flow_is_gap_plus_motion() -> None:
     assert total_reed_flow(1.2e-7, -0.2e-7) == 1.0e-7
 
+
+def test_zero_tract_feedback_recovers_static_mouth_pressure() -> None:
+    params = replace(DRAW_PARAMETERS, vocal_tract_feedback_gain=0.0)
+
+    assert effective_mouth_pressure(-850.0, 123.0, params) == -850.0
+
+
+def test_positive_tract_feedback_changes_effective_mouth_pressure() -> None:
+    params = replace(DRAW_PARAMETERS, vocal_tract_feedback_gain=0.05)
+
+    assert effective_mouth_pressure(-850.0, 100.0, params) == -855.0
+
+
+def test_blow_pressure_drop_uses_effective_mouth_pressure() -> None:
+    params = replace(DRAW_PARAMETERS, vocal_tract_feedback_gain=0.1)
+    state = np.zeros(7, dtype=float)
+    state[P_C] = 20.0
+    state[P_T] = 50.0
+
+    values = derived_state(1.0, 2.0, state, params)
+
+    assert values.p_m_static == DRAW_PARAMETERS.mouth_pressure_pa
+    assert values.p_m_effective == DRAW_PARAMETERS.mouth_pressure_pa - 5.0
+    assert values.delta_p_b == blow_pressure_drop(values.p_m_effective, 20.0)
+    assert values.delta_p_b != blow_pressure_drop(values.p_m_static, 20.0)
+
+
+def test_blow_reed_force_uses_effective_mouth_pressure() -> None:
+    params = replace(DRAW_PARAMETERS, vocal_tract_feedback_gain=0.1)
+    state = np.zeros(7, dtype=float)
+    state[P_C] = 20.0
+    state[P_T] = 50.0
+
+    values = derived_state(1.0, 2.0, state, params)
+
+    assert values.force_b == blow_reed_force(values.p_m_effective, 20.0, params)
+    assert values.force_b != blow_reed_force(values.p_m_static, 20.0, params)
