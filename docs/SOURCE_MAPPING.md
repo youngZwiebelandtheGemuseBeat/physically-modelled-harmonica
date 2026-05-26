@@ -1,16 +1,294 @@
 # Source Mapping
 
-This file maps the code to high-level source categories used in the proposal.
-It is intentionally short and does not add a separate literature review.
+## Purpose
 
-| Code / equation | Source category |
-| --- | --- |
-| `state_derivative`: one-degree-of-freedom reed ODE | Millot: equivalent one-degree-of-freedom reed oscillator / measured reed and pressure behavior |
-| `blow_reed_force`, `draw_reed_force` | Millot: pressure-driven reed behavior |
-| `reed_gap`, `opening_area` | Fletcher/Förtsch: free-reed flow reduction with a simple opening law |
-| `bernoulli_gap_flow` | Fletcher/Förtsch: Bernoulli/orifice approximation for reed-slot flow |
-| `chamber_pressure_derivative` | Möser/Zollner/EA: lumped acoustic compliance and acoustic analogies |
-| vocal-tract state in `state_derivative` | Wolfe/Egbert: vocal-tract impedance/load motivation |
-| `simulate_note` and `SimulationConfig` | Bilbao/Systemdynamik: time-domain numerical simulation / ODE state-space framing |
-| CSV, WAV, and validation plot export | Simulated state inspection and seminar documentation support |
+This document maps the implemented seminar-core model to the proposal sections and source categories.
 
+It is intentionally concise. It is not a separate literature review.
+
+## Model overview
+
+The implemented model follows the proposal structure:
+
+1. reed dynamics
+2. nonlinear airflow
+3. chamber-pressure evolution
+4. reduced vocal-tract loading
+
+## 1. Reed dynamics
+
+### Implemented equation
+
+\[
+m_i \ddot{x}_i + r_i \dot{x}_i + k_i x_i = F_i
+\]
+
+### Code
+
+- `harmonica_minimal.equations.state_derivative`
+- `harmonica_minimal.parameters.ReedParameters`
+
+### Proposal location
+
+- Section 1.1
+- Section 1.3
+
+### Source category
+
+**Millot et al. (2001)**
+
+Supports the use of equivalent one-degree-of-freedom damped oscillators for harmonica reeds and reports that reed motion during playing is approximately sinusoidal.
+
+**Systemdynamik**
+
+Supports the state-space formulation and conversion of second-order oscillator equations into a first-order ODE system.
+
+## 2. Pressure-driven reed forces
+
+### Implemented equations
+
+\[
+F_b = S_b(p_m - p_c)
+\]
+
+\[
+F_d = S_d(p_c - p_{\mathrm{out}})
+\]
+
+### Code
+
+- `harmonica_minimal.equations.blow_reed_force`
+- `harmonica_minimal.equations.draw_reed_force`
+
+### Proposal location
+
+- Section 1.1
+- Section 1.2
+
+### Source category
+
+**Proposal reduced-force closure**
+
+The force law is treated as a lumped pressure-loading approximation:
+
+\[
+F \approx S_i \Delta p
+\]
+
+This uses effective pressure-loaded reed surfaces rather than detailed pressure distributions.
+
+## 3. Reed opening law
+
+### Implemented equation
+
+\[
+A_i(x_i) = W_i \max(0, h_{i,0} + \alpha_i x_i)
+\]
+
+### Code
+
+- `harmonica_minimal.equations.reed_gap`
+- `harmonica_minimal.equations.opening_area`
+
+### Proposal location
+
+- Section 1.4
+- Nomenclature
+
+### Source category
+
+**Fletcher / Förtsch / Millot source context**
+
+The simple opening law is a reduced representation of reed-gap geometry. It connects reed displacement to effective airflow area.
+
+This is a modeling simplification.
+
+## 4. Bernoulli/orifice gap flow
+
+### Implemented equations
+
+\[
+Q_b =
+C_b A_b(x_b)
+\operatorname{sgn}(p_m - p_c)
+\sqrt{\frac{2|p_m - p_c|}{\rho}}
+\]
+
+\[
+Q_d =
+C_d A_d(x_d)
+\operatorname{sgn}(p_c - p_{\mathrm{out}})
+\sqrt{\frac{2|p_c - p_{\mathrm{out}}|}{\rho}}
+\]
+
+### Code
+
+- `harmonica_minimal.equations.bernoulli_gap_flow`
+
+### Proposal location
+
+- Section 1.4
+- Equations (8) and (9)
+
+### Source category
+
+**Fletcher / Förtsch**
+
+Motivates the reduced pressure-controlled valve and Bernoulli-style free-reed airflow formulation.
+
+**Millot et al. (2001)**
+
+Supports the interpretation that harmonic richness comes mainly from nonlinear airflow rather than strongly distorted reed displacement.
+
+## 5. Optional moving-reed flow
+
+### Optional implemented equation
+
+\[
+Q_{\mathrm{motion},i}
+=
+S_{\mathrm{motion},i}\dot{h}_i
+\]
+
+### Code
+
+- `harmonica_minimal.equations.motion_flow`
+- switchable with `--motion-flow on/off`
+
+### Proposal location
+
+- Section 1.4 discussion before equations (8) and (9)
+
+### Source category
+
+**Fuller free-reed flow formulation discussed in the proposal**
+
+The proposal states that the full flow formulation can contain both a gap-flow term and a moving-reed term. It then explicitly neglects the moving-reed term in the compact seminar model.
+
+Therefore, this term is source-aligned but not part of the main compact proposal equations.
+
+Recommended interpretation:
+
+- default off: compact proposal model
+- on: optional extension / comparison
+
+## 6. Chamber-pressure evolution
+
+### Implemented equation
+
+\[
+\dot{p}_c =
+\frac{\rho c^2}{V_c}
+(Q_b - Q_d)
+\]
+
+### Code
+
+- `harmonica_minimal.equations.chamber_pressure_derivative`
+
+### Proposal location
+
+- Section 1.5
+- Equation (10)
+
+### Source category
+
+**Möser / EA_1 / Zollner & Zwicker**
+
+Motivates the lumped acoustic compliance relation, pressure-flow analogies, and compressible cavity interpretation.
+
+## 7. Vocal-tract loading
+
+### Implemented equation
+
+\[
+\ddot{p}_t
++
+\frac{\omega_t}{Q_t}\dot{p}_t
++
+\omega_t^2 p_t
+=
+\omega_t^2 Z_t(Q_b - Q_d)
+\]
+
+### Code
+
+- `harmonica_minimal.equations.state_derivative`
+
+### Proposal location
+
+- Section 1.7
+- Equation (12)
+
+### Source category
+
+**Wolfe et al. (2009)**
+
+Motivates vocal-tract resonances and acoustic loading in musical instrument performance.
+
+**Egbert et al. (2013)**
+
+Motivates the relevance of vocal-tract geometry and tongue configuration in harmonica pitch bending.
+
+## 8. Numerical simulation
+
+### Implemented method
+
+Direct numerical integration of the first-order ODE system.
+
+### Code
+
+- `harmonica_minimal.simulate.simulate_note`
+- `harmonica_minimal.parameters.SimulationConfig`
+
+### Proposal location
+
+- Section 1.8
+- Section 2 approach
+
+### Source category
+
+**Bilbao**
+
+Motivates direct numerical simulation in physical modeling.
+
+**Systemdynamik**
+
+Motivates state-space representation of coupled dynamical systems.
+
+## 9. Output
+
+### Implemented output
+
+The WAV file is normalized chamber pressure:
+
+\[
+\mathrm{wav}(t)=p_c(t)/\max|p_c(t)|
+\]
+
+### Code
+
+- `harmonica_minimal.output.normalized_chamber_pressure`
+- `harmonica_minimal.output.write_pressure_wav`
+
+### Source category
+
+This is not a separate physical model. It is only an export of the simulated state variable \(p_c(t)\).
+
+No external radiation model is implemented in seminar-core.
+
+## 10. Excluded processing
+
+The seminar-core branch deliberately excludes:
+
+- radiation filtering
+- body/cover resonance
+- flow-noise synthesis
+- mixed pressure/flow rendering
+- EQ
+- reference matching
+- calibration search
+- sample playback
+- pitch shifting
+
+These exclusions preserve the distinction between a reduced physical model and a sound-design system.

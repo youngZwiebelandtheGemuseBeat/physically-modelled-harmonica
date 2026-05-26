@@ -13,6 +13,7 @@ no samples, no wavetable synthesis, and no pitch shifting.
 python run.py --mode draw
 python run.py --mode blow
 python run.py --mode both
+python run.py --mode both --motion-flow on --output-dir outputs_motion_flow_off
 ```
 
 Optional simple controls:
@@ -25,12 +26,19 @@ python run.py --mode draw --duration 1.5 --pressure 750 --attack 0.2 --motion-fl
 
 The commands write:
 
-- `outputs/draw_pressure.wav`
-- `outputs/draw_trace.csv`
-- `outputs/draw_validation.png`
-- `outputs/blow_pressure.wav`
-- `outputs/blow_trace.csv`
-- `outputs/blow_validation.png`
+- `output/output-1/draw_pressure.wav`
+- `output/output-1/draw_trace.csv`
+- `output/output-1/draw_validation.png`
+- `output/output-1/blow_pressure.wav`
+- `output/output-1/blow_trace.csv`
+- `output/output-1/blow_validation.png`
+
+If `--output-dir` is omitted, `run.py` creates the next available `output-N`
+directory inside the project-root `output/` directory, creating `output/` first
+if needed. If `--output-dir` is passed, it is treated as a subdirectory of
+`output/`, for example `--output-dir outputs_motion_flow_off` writes to
+`output/outputs_motion_flow_off/`. Passing `--output-dir output/name` is also
+accepted, but paths outside `output/` are rejected.
 
 The WAV is normalized chamber pressure from the solved physical model, not an
 external radiation model.
@@ -41,4 +49,3 @@ external radiation model.
 - `docs/SOURCE_MAPPING.md` maps equations and functions to proposal source categories.
 - `docs/LIMITATIONS.md` states what is deliberately excluded.
 - `docs/MINIMAL_DEFENSE_GUIDE.md` gives a concise explanation for seminar discussion.
-
