@@ -674,7 +674,7 @@ def render_calibration(output_dir: Path, mode: str, reference_path: Path | None 
     print(f"Best candidate: {best_name} score={best_score:.3f}")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None, output_dir: Path | None = None) -> None:
     """Parse CLI arguments and dispatch to the requested workflow."""
 
     parser = argparse.ArgumentParser(description="Render the offline harmonica physical model.")
@@ -707,9 +707,9 @@ def main() -> None:
         help="sustain pressure magnitude in Pa; sign is set by --mode",
     )
     parser.add_argument("--duration", type=float, default=2.5, help="render duration in seconds")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    output_dir = PROJECT_ROOT / "outputs"
+    output_dir = PROJECT_ROOT / "outputs" if output_dir is None else output_dir
     if args.analyze_reference is not None:
         analyze_reference(output_dir, args.analyze_reference)
     elif args.calibrate:

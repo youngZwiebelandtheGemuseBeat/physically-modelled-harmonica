@@ -16,7 +16,7 @@ if str(SRC_ROOT) not in sys.path:
 from harmonica_model.diagnostics import diagnostic_metrics, write_diagnostic_report
 from harmonica_model.params import BLOW_PARAMS, DEFAULT_PARAMS, DRAW_PARAMS, RenderConfig
 from harmonica_model.render import render_draw_note, render_note
-from run import render_both, render_mode_outputs, render_output_compare
+from run import main, render_both, render_mode_outputs, render_output_compare
 
 
 def test_render_smoke_produces_non_silent_audio() -> None:
@@ -29,6 +29,15 @@ def test_render_smoke_produces_non_silent_audio() -> None:
     assert np.all(np.isfinite(result.audio))
     assert float(np.max(np.abs(result.audio))) > 1.0e-4
     assert float(np.sqrt(np.mean(result.audio**2))) > 1.0e-5
+
+
+def test_default_cli_workflow_writes_draw_outputs(tmp_path: Path) -> None:
+    main(["--duration", "0.12"], output_dir=tmp_path)
+
+    assert (tmp_path / "draw_note.wav").exists()
+    assert (tmp_path / "draw_note_trace.csv").exists()
+    assert (tmp_path / "draw_note_diagnostics.png").exists()
+    assert (tmp_path / "draw_note_report.md").exists()
 
 
 def test_draw_mode_runs_and_writes_outputs(tmp_path: Path) -> None:
