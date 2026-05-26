@@ -1,6 +1,6 @@
 """Offline integration pipeline for the harmonica model.
 
-`equations.py` defines the physics.  This file decides how to solve those
+`equations.py` defines the physics. This file decides how to solve those
 equations over time, interpolate the result to audio rate, and collect all
 diagnostic traces needed to explain the simulation afterward.
 """

@@ -1,7 +1,7 @@
 """Player-control signals used before the physical equations.
 
 The breath envelope lives here so it is clearly separate from the final audio
-output.  The important point is that the envelope changes the mouth pressure
+output. The important point is that the envelope changes the mouth pressure
 that drives the reed forces and Bernoulli flows; it is not a post-render fade.
 """
 
@@ -29,7 +29,7 @@ def breath_envelope(t_s: float, params: ModelParams) -> float:
     """Return the current breath strength from 0 to 1.
 
     The envelope has four phases: silence before `pre_delay_s`, smooth attack,
-    sustain, and smooth release.  This value later multiplies signed mouth
+    sustain, and smooth release. This value later multiplies signed mouth
     pressure before the ODE equations are evaluated.
     """
 
@@ -47,7 +47,7 @@ def breath_envelope(t_s: float, params: ModelParams) -> float:
 def _breath_noise_multiplier(t_s: float, amount: float) -> float:
     """Return optional deterministic low-frequency breath roughness.
 
-    The default `amount` is zero.  When enabled, this gently modulates the
+    The default `amount` is zero. When enabled, this gently modulates the
     pressure source like a player's uneven breath, while staying repeatable.
     """
 
@@ -68,7 +68,7 @@ def mouth_pressure_source(t_s: float, params: ModelParams) -> float:
     """Return signed mouth pressure supplied to the physical model.
 
     Positive values mean blowing into the channel; negative values mean drawing
-    suction at the mouth side.  This pressure directly drives reed force and
+    suction at the mouth side. This pressure directly drives reed force and
     Bernoulli flow calculations in `equations.py`.
     """
 
@@ -80,7 +80,7 @@ def mouth_pressure_source(t_s: float, params: ModelParams) -> float:
 def draw_mouth_pressure(t_s: float, params: ModelParams) -> float:
     """Backward-compatible alias for older code/tests.
 
-    Earlier milestones had draw-only naming.  Newer code uses
+    Earlier milestones had draw-only naming. Newer code uses
     `mouth_pressure_source()` because the same function handles draw and blow.
     """
 

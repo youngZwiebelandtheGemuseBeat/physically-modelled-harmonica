@@ -1,10 +1,7 @@
 """Physical constants, reed presets, and numerical solver settings.
 
-This file is the parameter sheet for the model.  It deliberately contains no
-time stepping or signal generation logic; it only names the physical values that
-the equations use.  When defending the project, this is where to point for
-"what values did we assume?" and `equations.py` is where to point for "how are
-those values used?"
+This file is the parameter sheet for the model, it only names the physical
+values that the equations use.
 """
 
 from __future__ import annotations
@@ -52,7 +49,7 @@ class ModelParams:
     """Complete parameter set for one rendered harmonica channel.
 
     These values control the air, chamber, both reeds, breath source, vocal
-    tract load, and output/radiation approximation.  Draw and blow presets use
+    tract load, and output/radiation approximation. Draw and blow presets use
     the same fields, but with different signed pressure and reed settings.
     """
 
@@ -195,7 +192,7 @@ def _reed_from_frequency(
     )
 
 
-# Default draw-note preset.  It uses negative mouth pressure and makes the draw
+# Default draw-note preset. It uses negative mouth pressure and makes the draw
 # reed the more active, high-Q reed-slot oscillator.
 DEFAULT_PARAMS = ModelParams(
     rho_air_kg_m3=1.204,

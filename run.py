@@ -8,7 +8,7 @@ This script wires together the package modules:
 4. write WAV/CSV/diagnostic files, and
 5. optionally run sweeps, calibration, or reference analysis.
 
-The physical formulas are not defined here.  They live in
+The physical formulas are not defined here. They live in
 `src/harmonica_model/equations.py`; this file is the operator interface.
 """
 
@@ -577,7 +577,7 @@ def render_calibration(output_dir: Path, mode: str, reference_path: Path | None 
     """Run a bounded calibration search and write ranked candidates.
 
     Calibration changes physical parameters and output-layer settings, renders
-    each candidate, analyzes the result, and ranks candidates.  Reference audio,
+    each candidate, analyzes the result, and ranks candidates. Reference audio,
     if provided, is used only for scoring, never as an audio source.
     """
 

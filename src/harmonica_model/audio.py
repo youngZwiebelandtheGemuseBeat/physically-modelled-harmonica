@@ -1,8 +1,8 @@
 """Audio export and physical output/radiation approximation.
 
-The ODE does not directly produce a finished WAV.  It produces physical states:
-chamber pressure, tract pressure, and flows.  This module turns those simulated
-states into an audible pressure-like waveform, then writes it as a WAV.  No
+The ODE does not directly produce a finished WAV. It produces physical states:
+chamber pressure, tract pressure, and flows. This module turns those simulated
+states into an audible pressure-like waveform, then writes it as a WAV. No
 samples, wavetables, pitch shifting, or synthetic oscillator are introduced.
 """
 
@@ -29,7 +29,7 @@ def write_wav(path: str | Path, audio: np.ndarray, sample_rate_hz: int) -> None:
 def normalize_audio(signal_values: np.ndarray, peak: float = 0.85) -> np.ndarray:
     """Scale an audio-like signal to a target peak without changing its shape.
 
-    This is a single global scale factor.  It does not compress, pitch shift,
+    This is a single global scale factor. It does not compress, pitch shift,
     EQ, or add harmonic content.
     """
 
@@ -67,7 +67,7 @@ def physical_output_signal(
     net_flow = q_b - q_d - leak_flow
 
     # Choose a sensible flow gain if the preset did not set a direct net-flow
-    # gain.  This affects only output scaling before global normalization.
+    # gain. This affects only output scaling before global normalization.
     flow_gain = params.acoustic_flow_gain_pa_s_m3
     if flow_gain == 0.0:
         flow_gain = max(
@@ -77,7 +77,7 @@ def physical_output_signal(
         )
 
     # The mixed source is a documented physical combination of simulated
-    # pressures and flows.  It is not an extra tone generator.
+    # pressures and flows. It is not an extra tone generator.
     mixed = (
         params.chamber_pressure_output_gain * p_c
         + params.pressure_output_gain * p_t
@@ -121,7 +121,7 @@ def physical_output_signal(
         radiated = signal.sosfilt(sos, radiated)
 
     # A compact acoustic flow source tends to radiate with a differentiating
-    # character.  The mix is bounded so this remains a conservative coloration.
+    # character. The mix is bounded so this remains a conservative coloration.
     diff_mix = float(np.clip(params.radiation_differentiation_mix if params.radiation_enabled else 0.0, 0.0, 1.0))
     if diff_mix > 0.0 and radiated.size > 1:
         differentiated = np.gradient(radiated) * float(sample_rate_hz)
@@ -131,7 +131,7 @@ def physical_output_signal(
             differentiated = differentiated * (raw_peak / diff_peak)
             radiated = (1.0 - diff_mix) * radiated + diff_mix * differentiated
 
-    # Optional broad body/cover coloration.  Low Q and small gain keep this from
+    # Optional broad body/cover coloration. Low Q and small gain keep this from
     # becoming an independent ringing oscillator.
     if (
         params.radiation_enabled
@@ -145,7 +145,7 @@ def physical_output_signal(
         body = signal.lfilter(b, a, radiated)
         radiated = radiated + params.body_resonance_gain * body
 
-    # Optional unresolved turbulent noise.  Its envelope is derived from
+    # Optional unresolved turbulent noise. Its envelope is derived from
     # simulated Bernoulli flow magnitude, so it appears only when flow exists.
     if params.flow_noise_amount > 0.0 and radiated.size > 8:
         rng = np.random.default_rng(params.flow_noise_seed)

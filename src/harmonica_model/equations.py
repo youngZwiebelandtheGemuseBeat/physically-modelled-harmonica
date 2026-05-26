@@ -1,7 +1,7 @@
 """Core physical equations for one harmonica channel.
 
-This file is the main "physics engine" of the project.  The ODE solver calls
-`state_derivatives()` many times per rendered note.  At each call this module
+This file is the main "physics engine" of the project. The ODE solver calls
+`state_derivatives()` many times per rendered note. At each call this module
 computes:
 
 1. the signed mouth pressure supplied by the player,
@@ -27,7 +27,7 @@ from .params import ModelParams, ReedParams
 
 
 # Named indices make the seven-element ODE state readable everywhere else in
-# the code.  `x` means displacement, `v` means velocity, `p` means pressure.
+# the code. `x` means displacement, `v` means velocity, `p` means pressure.
 X_B = 0
 V_B = 1
 X_D = 2
@@ -42,7 +42,7 @@ STATE_SIZE = 7
 class DerivedValues:
     """Human-readable physical quantities derived from one ODE state.
 
-    The solver state stores only the minimum variables needed by the ODE.  This
+    The solver state stores only the minimum variables needed by the ODE. This
     object recomputes secondary values such as flow, force, and opening area so
     reports and CSV traces can show what the physics did at each time sample.
     """
@@ -89,7 +89,7 @@ def reed_gap(displacement_m: float, reed: ReedParams) -> float:
 def reed_closure_damping(gap_m: float, reed: ReedParams) -> float:
     """Return extra damping when a reed approaches the slot.
 
-    This is a physical loss approximation for near-closure/contact.  It is
+    This is a physical loss approximation for near-closure/contact. It is
     applied inside the reed ODE, not as an audio effect after the fact.
     """
 
@@ -103,7 +103,7 @@ def reed_closure_damping(gap_m: float, reed: ReedParams) -> float:
 def bernoulli_flow(delta_p_pa: float, area_m2: float, params: ModelParams, discharge_coefficient: float) -> float:
     """Compute signed Bernoulli volume flow through a reed slot.
 
-    Implements `Q = C A sgn(DeltaP) sqrt(2 |DeltaP| / rho)`.  The sign of the
+    Implements `Q = C A sgn(DeltaP) sqrt(2 |DeltaP| / rho)`. The sign of the
     pressure drop decides flow direction; the square root creates the nonlinear
     pressure-to-flow relation that helps generate harmonics.
     """
@@ -160,9 +160,9 @@ def chamber_pressure_derivative(
 def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.ndarray:
     """Return the seven ODE derivatives at time `t_s`.
 
-    This is the central workflow of the model.  `solve_ivp` repeatedly calls
+    This is the central workflow of the model. `solve_ivp` repeatedly calls
     this function to advance the coupled reed, flow, chamber, and vocal-tract
-    state.  The output order matches the state vector order:
+    state. The output order matches the state vector order:
     `[x_b', v_b', x_d', v_d', p_c', p_t', v_t']`.
     """
 
@@ -174,7 +174,7 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
     # not faded afterward to fake an attack.
     p_m = mouth_pressure_source(t_s, params)
 
-    # Reed displacement controls the instantaneous geometric opening.  Smaller
+    # Reed displacement controls the instantaneous geometric opening. Smaller
     # opening area reduces flow and can create the nonlinear near-closure regime.
     area_b = reed_opening_area(x_b, params.blow_reed)
     area_d = reed_opening_area(x_d, params.draw_reed)
@@ -207,7 +207,7 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
     )
 
     # Reed mechanics: each reed is a damped mass-spring oscillator driven by
-    # pressure force.  `dx` is velocity; `dv` is acceleration.
+    # pressure force. `dx` is velocity; `dv` is acceleration.
     dx_b = v_b
     dv_b = (
         force_b
@@ -243,7 +243,7 @@ def state_derivatives(t_s: float, state: np.ndarray, params: ModelParams) -> np.
 def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> DerivedValues:
     """Recompute report/trace quantities from one solved state.
 
-    The ODE solver only stores the state variables.  This function follows the
+    The ODE solver only stores the state variables. This function follows the
     same equations used during integration so CSV traces and diagnostics can
     show the pressure drops, flows, forces, opening areas, and output mixture
     associated with a particular time sample.
@@ -276,7 +276,7 @@ def derived_values(t_s: float, state: np.ndarray, params: ModelParams) -> Derive
     q_loss = chamber_loss_flow(p_c, params)
     dp_c = chamber_pressure_derivative(q_b, q_d, params, p_c)
 
-    # Legacy/reporting pressure mixture.  The final WAV is formed in
+    # Legacy/reporting pressure mixture. The final WAV is formed in
     # `audio.physical_output_signal()`, but this is useful for diagnostics.
     audio_pressure = (
         params.chamber_pressure_output_gain * p_c

@@ -1,6 +1,6 @@
 """Audio-analysis helpers for validating and comparing rendered notes.
 
-These routines do not create the harmonica sound.  They measure an existing
+These routines do not create the harmonica sound. They measure an existing
 WAV/audio array so the project can report pitch, harmonic content, spectral
 centroid, attack time, and similarity to an optional reference recording.
 """
@@ -287,7 +287,7 @@ def write_analysis_plot(path: str | Path, title: str, analysis: SignalAnalysis) 
 def comparison_score(synthetic: SignalAnalysis, reference: SignalAnalysis) -> float:
     """Return a bounded similarity score between synthetic and reference audio.
 
-    The score compares analysis features only.  Reference audio is never used
+    The score compares analysis features only. Reference audio is never used
     as a source for rendering.
     """
 

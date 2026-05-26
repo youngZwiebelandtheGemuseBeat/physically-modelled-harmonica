@@ -1,6 +1,6 @@
 """Diagnostics, CSV traces, plots, and audit reports for rendered notes.
 
-This module is the "evidence layer" for the project.  It does not change the
+This module is the "evidence layer" for the project. It does not change the
 physical model; it measures the render result and writes files that make the
 simulation defendable: pressure signs, reed motion, flows, spectra, and target
 checks.
