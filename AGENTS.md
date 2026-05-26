@@ -20,24 +20,56 @@ Do not fake bending with pitch shifting.
 The implementation must use these model blocks:
 
 1. Reed dynamics:
-m_i x_i'' + r_i x_i' + k_i x_i = F_air
+
+$$
+m_i \ddot{x}_i + r_i \dot{x}_i + k_i x_i = F_{\mathrm{air}}
+$$
 
 2. Blow reed pressure force:
-F_b = S_b (p_m - p_c)
+
+$$
+F_b = S_b(p_m - p_c)
+$$
 
 3. Draw reed pressure force:
-F_d = S_d (p_c - p_out)
+
+$$
+F_d = S_d(p_c - p_{\mathrm{out}})
+$$
 
 4. Bernoulli-based nonlinear airflow:
-Q_b = C_b A_b(x_b) sgn(p_m - p_c) sqrt(2 |p_m - p_c| / rho)
-Q_d = C_d A_d(x_d) sgn(p_c - p_out) sqrt(2 |p_c - p_out| / rho)
+
+$$
+Q_b =
+C_b A_b(x_b)
+\operatorname{sgn}(p_m - p_c)
+\sqrt{\frac{2|p_m - p_c|}{\rho}}
+$$
+
+$$
+Q_d =
+C_d A_d(x_d)
+\operatorname{sgn}(p_c - p_{\mathrm{out}})
+\sqrt{\frac{2|p_c - p_{\mathrm{out}}|}{\rho}}
+$$
 
 5. Chamber pressure:
-p_c' = rho c^2 / V_c * (Q_b - Q_d)
+
+$$
+\dot{p}_c = \frac{\rho c^2}{V_c}(Q_b - Q_d)
+$$
 
 6. Reduced vocal-tract resonator:
-p_t'' + (omega_t / Q_t) p_t' + omega_t^2 p_t
-= omega_t^2 Z_t (Q_b - Q_d)
+
+$$
+\ddot{p}_t
++
+\frac{\omega_t}{Q_t}\dot{p}_t
++
+\omega_t^2 p_t
+=
+\omega_t^2 Z_t(Q_b - Q_d)
+$$
 
 ## Implementation priorities
 First priority: produce a non-silent WAV from the physical model.

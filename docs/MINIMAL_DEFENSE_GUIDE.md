@@ -17,7 +17,9 @@ sound comes from solved model states.
 
 ## State Vector
 
-`[x_b, v_b, x_d, v_d, p_c, p_t, v_t]`
+$$
+[x_b,\ v_b,\ x_d,\ v_d,\ p_c,\ p_t,\ v_t]
+$$
 
 ## Equations
 
@@ -57,11 +59,10 @@ physical model, not an external radiation model.
 
 ## Answering Defense Questions
 
-- If asked where the sound comes from: from the solved chamber pressure `p_c(t)`.
+- If asked where the sound comes from: from the solved chamber pressure $p_c(t)$.
 - If asked why it is not fully realistic: the model is intentionally reduced.
 - If asked why no polishing was added: the branch is constrained to proposal
   equations and direct state export.
 - If asked what to improve physically: refine the reed opening/crossing law,
   add documented contact mechanics, or replace the reduced vocal tract with a
   better physical load.
-

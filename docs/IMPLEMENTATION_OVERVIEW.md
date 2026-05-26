@@ -41,19 +41,19 @@ The seminar-core branch does not implement:
 
 The ODE state is:
 
-\[
+$$
 [x_b,\ v_b,\ x_d,\ v_d,\ p_c,\ p_t,\ v_t]
-\]
+$$
 
 where:
 
-- \(x_b\): blow reed displacement
-- \(v_b\): blow reed velocity
-- \(x_d\): draw reed displacement
-- \(v_d\): draw reed velocity
-- \(p_c\): chamber pressure
-- \(p_t\): reduced vocal-tract pressure
-- \(v_t=\dot{p}_t\): vocal-tract pressure derivative
+- $x_b$: blow reed displacement
+- $v_b$: blow reed velocity
+- $x_d$: draw reed displacement
+- $v_d$: draw reed velocity
+- $p_c$: chamber pressure
+- $p_t$: reduced vocal-tract pressure
+- $v_t=\dot{p}_t$: vocal-tract pressure derivative
 
 ## Execution flow
 

@@ -19,9 +19,9 @@ The implemented model follows the proposal structure:
 
 ### Implemented equation
 
-\[
+$$
 m_i \ddot{x}_i + r_i \dot{x}_i + k_i x_i = F_i
-\]
+$$
 
 ### Code
 
@@ -47,13 +47,13 @@ Supports the state-space formulation and conversion of second-order oscillator e
 
 ### Implemented equations
 
-\[
+$$
 F_b = S_b(p_m - p_c)
-\]
+$$
 
-\[
+$$
 F_d = S_d(p_c - p_{\mathrm{out}})
-\]
+$$
 
 ### Code
 
@@ -71,9 +71,9 @@ F_d = S_d(p_c - p_{\mathrm{out}})
 
 The force law is treated as a lumped pressure-loading approximation:
 
-\[
+$$
 F \approx S_i \Delta p
-\]
+$$
 
 This uses effective pressure-loaded reed surfaces rather than detailed pressure distributions.
 
@@ -81,9 +81,9 @@ This uses effective pressure-loaded reed surfaces rather than detailed pressure 
 
 ### Implemented equation
 
-\[
+$$
 A_i(x_i) = W_i \max(0, h_{i,0} + \alpha_i x_i)
-\]
+$$
 
 ### Code
 
@@ -107,19 +107,19 @@ This is a modeling simplification.
 
 ### Implemented equations
 
-\[
+$$
 Q_b =
 C_b A_b(x_b)
 \operatorname{sgn}(p_m - p_c)
 \sqrt{\frac{2|p_m - p_c|}{\rho}}
-\]
+$$
 
-\[
+$$
 Q_d =
 C_d A_d(x_d)
 \operatorname{sgn}(p_c - p_{\mathrm{out}})
 \sqrt{\frac{2|p_c - p_{\mathrm{out}}|}{\rho}}
-\]
+$$
 
 ### Code
 
@@ -144,11 +144,11 @@ Supports the interpretation that harmonic richness comes mainly from nonlinear a
 
 ### Optional implemented equation
 
-\[
+$$
 Q_{\mathrm{motion},i}
 =
 S_{\mathrm{motion},i}\dot{h}_i
-\]
+$$
 
 ### Code
 
@@ -176,11 +176,11 @@ Recommended interpretation:
 
 ### Implemented equation
 
-\[
+$$
 \dot{p}_c =
 \frac{\rho c^2}{V_c}
 (Q_b - Q_d)
-\]
+$$
 
 ### Code
 
@@ -201,7 +201,7 @@ Motivates the lumped acoustic compliance relation, pressure-flow analogies, and 
 
 ### Implemented equation
 
-\[
+$$
 \ddot{p}_t
 +
 \frac{\omega_t}{Q_t}\dot{p}_t
@@ -209,7 +209,7 @@ Motivates the lumped acoustic compliance relation, pressure-flow analogies, and 
 \omega_t^2 p_t
 =
 \omega_t^2 Z_t(Q_b - Q_d)
-\]
+$$
 
 ### Code
 
@@ -262,9 +262,9 @@ Motivates state-space representation of coupled dynamical systems.
 
 The WAV file is normalized chamber pressure:
 
-\[
+$$
 \mathrm{wav}(t)=p_c(t)/\max|p_c(t)|
-\]
+$$
 
 ### Code
 
@@ -273,7 +273,7 @@ The WAV file is normalized chamber pressure:
 
 ### Source category
 
-This is not a separate physical model. It is only an export of the simulated state variable \(p_c(t)\).
+This is not a separate physical model. It is only an export of the simulated state variable $p_c(t)$.
 
 No external radiation model is implemented in seminar-core.
 
