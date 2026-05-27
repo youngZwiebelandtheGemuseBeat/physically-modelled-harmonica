@@ -61,13 +61,13 @@ Running:
 
 ```bash
 python run.py --mode draw
-python run.py --mode both --tract-load on
-python run.py --mode both --tract-load off
+python run.py --mode both --tract-feedback-gain 0.0
+python run.py --mode both --tract-feedback-gain 0.05
 ```
 
 The main execution path is:
 
-1. `run.py` parses mode, breath options, motion-flow state, and tract-load state.
+1. `run.py` parses mode, breath options, motion-flow state, and optional tract feedback gain.
 2. `parameters_for_mode` selects draw or blow parameters.
 3. `simulate_note` integrates the ODE state.
 4. `output.py` writes normalized chamber pressure, CSV trace, and text diagnostics.

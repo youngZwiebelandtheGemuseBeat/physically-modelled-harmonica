@@ -15,6 +15,9 @@ python run.py --mode blow
 python run.py --mode both
 python run.py --mode both --motion-flow off --output-dir outputs_motion_flow_off
 python run.py --mode both --motion-flow on --output-dir outputs_motion_flow_on
+python run.py --mode both --motion-flow off --tract-feedback-gain 0.0 --output-dir tract_feedback_000
+python run.py --mode both --motion-flow off --tract-feedback-gain 0.05 --output-dir tract_feedback_005
+python run.py --mode both --motion-flow off --tract-feedback-gain 0.10 --output-dir tract_feedback_010
 ```
 
 Optional simple controls:

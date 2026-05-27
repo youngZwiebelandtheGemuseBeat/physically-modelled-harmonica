@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pressure", type=float, default=None, help="Breath pressure magnitude in pascals.")
     parser.add_argument("--attack", type=float, default=None, help="Attack time in seconds.")
     parser.add_argument("--motion-flow", choices=["on", "off"], default="off")
-    parser.add_argument("--tract-load", choices=["on", "off"], default="on")
+    parser.add_argument("--tract-feedback-gain", type=float, default=None, help="Vocal tract feedback gain. Overrides vocal_tract_feedback_gain.")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -73,14 +73,13 @@ def display_path(path: Path) -> str:
 def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> None:
     config = SimulationConfig(duration_s=args.duration)
     motion_enabled = args.motion_flow == "on"
-    tract_gain = 0.0 if args.tract_load == "off" else None
     result = simulate_note(
         mode,
         config=config,
         pressure_pa=args.pressure,
         attack_s=args.attack,
         motion_flow_enabled=motion_enabled,
-        vocal_tract_feedback_gain=tract_gain,
+        vocal_tract_feedback_gain=args.tract_feedback_gain,
     )
 
     wav_path = output_dir / f"{mode}_pressure.wav"
