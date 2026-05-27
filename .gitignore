@@ -229,3 +229,6 @@ outputs/
 # never commit any output directories or source documents
 output/
 sources/
+
+# do not commit local markdown files
+AGENTS.md
