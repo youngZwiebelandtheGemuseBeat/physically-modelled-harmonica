@@ -73,6 +73,7 @@ def simulate_note(
     """Solve the proposal ODE for one blow or draw note."""
 
     params = parameters_for_mode(mode)
+    """Check if any parameters have been set at call"""
     if pressure_pa is not None:
         sign = -1.0 if mode == "draw" else 1.0
         params = replace(params, mouth_pressure_pa=sign * abs(pressure_pa))
@@ -88,7 +89,7 @@ def simulate_note(
     initial_state = np.zeros(STATE_SIZE, dtype=float)
 
     solution = solve_ivp(
-        fun=lambda t, y: state_derivative(t, y, config.duration_s, params),
+        fun=lambda t, y: state_derivative(t, y, config.duration_s, params), # loops
         t_span=(0.0, config.duration_s),
         y0=initial_state,
         t_eval=time_s,

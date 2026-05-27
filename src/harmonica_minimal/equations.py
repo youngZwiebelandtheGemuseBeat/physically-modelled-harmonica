@@ -127,8 +127,7 @@ def chamber_pressure_derivative(q_b_total_m3_s: float, q_d_total_m3_s: float, pa
 
     return (
         params.rho_air_kg_m3
-        * params.speed_of_sound_m_s
-        * params.speed_of_sound_m_s
+        * params.speed_of_sound_m_s ** 2
         / params.chamber_volume_m3
         * (q_b_total_m3_s - q_d_total_m3_s)
     )
@@ -161,8 +160,8 @@ def derived_state(t_s: float, duration_s: float, state: np.ndarray, params: Mode
         params.draw_reed.discharge_coefficient,
         params.rho_air_kg_m3,
     )
-    q_b_motion = motion_flow(float(v_b), params.blow_reed, params.motion_flow_enabled)
-    q_d_motion = motion_flow(float(v_d), params.draw_reed, params.motion_flow_enabled)
+    q_b_motion = motion_flow(float(v_b), params.blow_reed, params.motion_flow_enabled) # currently neglected (default: 0)
+    q_d_motion = motion_flow(float(v_d), params.draw_reed, params.motion_flow_enabled) # currently neglected (default: 0)
     q_b_total = total_reed_flow(q_b_gap, q_b_motion)
     q_d_total = total_reed_flow(q_d_gap, q_d_motion)
 
