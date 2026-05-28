@@ -154,16 +154,16 @@ def diagnostics_text(result: SimulationResult) -> str:
     passive_window = passive[start:stop]
 
     f0 = estimate_fundamental_hz(active_window, result.sample_rate_hz)
-    active_rms = float(np.sqrt(np.mean(active_window * active_window)))
-    passive_rms = float(np.sqrt(np.mean(passive_window * passive_window)))
-    pressure_rms = float(np.sqrt(np.mean(p_window * p_window)))
-    p_t_rms = float(np.sqrt(np.mean(p_t_window * p_t_window)))
-    load_rms = float(np.sqrt(np.mean(load_window * load_window)))
+    active_rms = float(np.sqrt(np.mean(active_window ** 2)))
+    passive_rms = float(np.sqrt(np.mean(passive_window ** 2)))
+    pressure_rms = float(np.sqrt(np.mean(p_window ** 2)))
+    p_t_rms = float(np.sqrt(np.mean(p_t_window ** 2)))
+    load_rms = float(np.sqrt(np.mean(load_window ** 2)))
     pressure_peak = float(np.max(np.abs(p_window))) if p_window.size else 0.0
     crest = pressure_peak / pressure_rms if pressure_rms > 0.0 else 0.0
 
     dp = np.diff(p_window) * result.sample_rate_hz
-    dp_rms = float(np.sqrt(np.mean(dp * dp))) if dp.size else 0.0
+    dp_rms = float(np.sqrt(np.mean(dp ** 2))) if dp.size else 0.0
     sharpness = float(np.max(np.abs(dp)) / dp_rms) if dp_rms > 0.0 else 0.0
 
     near_b = float(100.0 * np.mean(result.gap_b[start:stop] <= 1.0e-6))

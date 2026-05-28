@@ -75,7 +75,7 @@ def reed_from_frequency(
     return ReedParameters(
         mass_kg=mass_kg,
         damping_kg_s=mass_kg * omega / quality_factor,
-        stiffness_n_m=mass_kg * omega * omega,
+        stiffness_n_m=mass_kg * omega ** 2,
         pressure_area_m2=pressure_area_m2,
         slot_width_m=slot_width_m,
         rest_gap_m=rest_gap_m,

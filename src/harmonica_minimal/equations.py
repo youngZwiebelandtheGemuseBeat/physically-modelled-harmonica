@@ -48,10 +48,10 @@ def smooth_breath_pressure(t_s: float, duration_s: float, params: ModelParameter
     release = max(params.release_s, 1.0e-9)
     if t_s < attack:
         u = max(0.0, min(1.0, t_s / attack))
-        envelope = u * u * (3.0 - 2.0 * u)
+        envelope = u ** 2 * (3.0 - 2.0 * u)
     elif t_s > duration_s - release:
         u = max(0.0, min(1.0, (duration_s - t_s) / release))
-        envelope = u * u * (3.0 - 2.0 * u)
+        envelope = u ** 2 * (3.0 - 2.0 * u)
     else:
         envelope = 1.0
     return params.mouth_pressure_pa * envelope
@@ -213,9 +213,9 @@ def state_derivative(t_s: float, state: np.ndarray, duration_s: float, params: M
     omega_t = params.vocal_tract_omega_rad_s
     dp_t = v_t
     dv_t = (
-        omega_t * omega_t * params.vocal_tract_impedance_pa_s_m3 * (values.q_b_total - values.q_d_total)
+        omega_t ** 2 * params.vocal_tract_impedance_pa_s_m3 * (values.q_b_total - values.q_d_total)
         - (omega_t / params.vocal_tract_q) * v_t
-        - omega_t * omega_t * state[P_T]
+        - omega_t ** 2 * state[P_T]
     )
 
     return np.array([dx_b, dv_b, dx_d, dv_d, values.dp_c, dp_t, dv_t], dtype=float)
