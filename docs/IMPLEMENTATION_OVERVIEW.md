@@ -103,3 +103,16 @@ The WAV signal remains normalized chamber pressure:
 $$
 \mathrm{wav}(t)=p_c(t)/\max|p_c(t)|
 $$
+
+## Demo readiness boundary
+
+The branch implements the proposal-level core: reed ODEs, pressure forces,
+Bernoulli/orifice flow, chamber-pressure feedback, reduced vocal-tract loading,
+and direct offline numerical integration.
+
+The remaining gap to a more realistic harmonica sound is physical refinement,
+not fake synthesis. The most important candidates are the clipped reed-opening
+and contact closure, parameter tuning for stronger nonlinear flow, and a more
+explicit acoustic load. The seminar-core branch still excludes radiation
+filtering, body/cover coloration, synthetic airflow noise, samples, wavetables,
+pitch shifting, and machine learning.

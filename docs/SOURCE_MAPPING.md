@@ -6,6 +6,13 @@ This document maps the implemented seminar-core model to the proposal sections a
 
 It is intentionally concise. It is not a separate literature review.
 
+The main proposal PDF is the binding source for the implementation scope.
+Additional PDFs are used as supporting context:
+
+- Bilbao: direct numerical physical-model simulation
+- Fletcher: nonlinear musical-instrument and free-reed context
+- Rossing: general acoustics background
+
 ## Model overview
 
 The implemented model follows the proposal structure:
@@ -280,6 +287,11 @@ Direct numerical integration of the first-order ODE system.
 **Bilbao**
 
 Motivates direct numerical simulation in physical modeling.
+
+**Rossing**
+
+Supports the general acoustics background for treating pressure, flow, and
+lumped acoustic elements in a reduced instrument model.
 
 **Systemdynamik**
 

@@ -230,6 +230,29 @@ $$
 
 It is not an external acoustic radiation model.
 
+## Missing versus proposal / next steps
+
+The proposal-level core is implemented: reed ODEs, pressure forces,
+Bernoulli/orifice flows, chamber-pressure evolution, reduced vocal-tract
+loading, and direct numerical integration.
+
+The main remaining work is physical refinement rather than adding a synthetic
+audio layer:
+
+- refine the clipped opening/contact closure
+- tune physical parameters for stronger nonlinear flow while preserving
+  stability
+- document any future acoustic load more explicitly
+- keep any external radiation or body/cover model out of the seminar-core
+  branch unless it is introduced as a separate, documented physical extension
+
+## Source roles
+
+The main proposal is the binding source for the equations and scope. Bilbao is
+used as support for direct numerical physical-model simulation, Fletcher for
+nonlinear instrument/free-reed behavior, and Rossing for broader acoustics
+background.
+
 ## Documentation philosophy
 
 The documentation is descriptive.

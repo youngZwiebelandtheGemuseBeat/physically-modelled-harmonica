@@ -34,6 +34,9 @@ right-hand side is `harmonica_minimal.equations.state_derivative`.
 4. `output.py` writes normalized chamber pressure, trace CSV, and diagnostics.
 5. `plots.py` writes one compact validation figure per note.
 
+By default, `run.py` writes to the next `output/output-N/` directory. Passing
+`--output-dir name` writes to `output/name/`.
+
 ## File Map
 
 - `run.py`: command-line entry point
@@ -56,6 +59,23 @@ There is no external acoustic renderer, no samples, no pitch shifting, no
 post-processing chain, no automated parameter search, and no reference-audio
 matching workflow. The WAV is normalized chamber pressure from the solved
 physical model, not an external radiation model.
+
+## Missing Versus Full Realism
+
+Implemented from the proposal: reed dynamics, pressure forces, nonlinear
+Bernoulli flow, chamber-pressure feedback, the reduced vocal-tract resonator,
+and direct numerical integration.
+
+Still reduced: the reed opening/contact law is a clipped linear gap; there is
+no body/cover acoustic coloration, no external radiation model, and no full
+vocal-tract geometry. These omissions should be presented as model scope, not
+as hidden defects.
+
+## Source Roles
+
+The main proposal is the binding model source. Bilbao supports the direct
+numerical physical-modeling approach. Fletcher supports the nonlinear
+instrument/free-reed framing. Rossing supports general acoustics context.
 
 ## Answering Defense Questions
 
