@@ -13,7 +13,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from harmonica_minimal.parameters import SimulationConfig
-from harmonica_minimal.output import write_trace_csv
+from harmonica_minimal.output import diagnostics_text, low_frequency_measurements, write_trace_csv
 from harmonica_minimal.simulate import simulate_note
 
 
@@ -62,3 +62,22 @@ def test_effective_mouth_pressure_appears_in_trace_output(tmp_path: Path) -> Non
     assert "p_m_static" in header
     assert "p_m_effective" in header
     assert "vocal_tract_feedback_gain" in header
+
+
+def test_low_frequency_diagnostics_cover_required_signals() -> None:
+    config = SimulationConfig(duration_s=0.18, sample_rate_hz=8_000, max_step_s=1.0 / 8_000.0)
+    result = simulate_note("draw", config=config)
+
+    measurements = low_frequency_measurements(result)
+    names = {measurement.name for measurement in measurements}
+    assert "raw chamber pressure p_c" in names
+    assert "vocal-tract pressure p_t" in names
+    assert "net flow q_b - q_d - q_loss" in names
+    assert "raw selected output before normalization" in names
+    assert "final normalized audio" in names
+
+    report = diagnostics_text(result)
+    assert "Low-frequency/DC content, full note:" in report
+    assert "Low-frequency/DC content, steady-state excluding attack/release:" in report
+    assert "H1=f0" in report
+    assert "0 Hz is the DC bin, not a harmonic" in report

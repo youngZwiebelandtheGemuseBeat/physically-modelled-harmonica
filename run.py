@@ -13,7 +13,13 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from harmonica_minimal.output import write_diagnostics, write_pressure_wav, write_trace_csv
+from harmonica_minimal.output import (
+    DEFAULT_DC_BLOCK_CUTOFF_HZ,
+    rendered_audio_signal,
+    write_diagnostics,
+    write_pressure_wav,
+    write_trace_csv,
+)
 from harmonica_minimal.parameters import SimulationConfig
 from harmonica_minimal.plots import write_validation_plot
 from harmonica_minimal.simulate import simulate_note
@@ -27,6 +33,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attack", type=float, default=None, help="Attack time in seconds.")
     parser.add_argument("--motion-flow", choices=["on", "off"], default="off")
     parser.add_argument("--tract-feedback-gain", type=float, default=None, help="Vocal tract feedback gain. Overrides vocal_tract_feedback_gain.")
+    parser.add_argument(
+        "--wav-dc-block",
+        action="store_true",
+        help="Apply an optional first-order DC blocker to the WAV only. Physical traces remain unchanged.",
+    )
+    parser.add_argument(
+        "--wav-dc-block-cutoff",
+        type=float,
+        default=DEFAULT_DC_BLOCK_CUTOFF_HZ,
+        help="Cutoff frequency for --wav-dc-block in Hz.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -87,10 +104,18 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> None:
     plot_path = output_dir / f"{mode}_validation.png"
     diagnostics_path = output_dir / f"{mode}_diagnostics.txt"
 
-    write_pressure_wav(wav_path, result)
+    dc_block_cutoff = args.wav_dc_block_cutoff if args.wav_dc_block else None
+    wav_processing = (
+        f"optional first-order DC blocker at {args.wav_dc_block_cutoff:.6g} Hz, then peak normalization"
+        if args.wav_dc_block
+        else "peak normalization only"
+    )
+    final_audio = rendered_audio_signal(result, dc_block_cutoff)
+
+    write_pressure_wav(wav_path, result, dc_block_cutoff)
     write_trace_csv(trace_path, result)
     write_validation_plot(plot_path, result)
-    report = write_diagnostics(diagnostics_path, result)
+    report = write_diagnostics(diagnostics_path, result, final_audio, wav_processing)
 
     print(report)
     print(f"wrote {display_path(wav_path)}")
