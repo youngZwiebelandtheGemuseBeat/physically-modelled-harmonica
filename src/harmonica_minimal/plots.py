@@ -74,7 +74,7 @@ def _mark_harmonics(ax: plt.Axes, f0_hz: float) -> None:
         ax.text(
             frequency,
             ymax - 0.08 * (ymax - ymin),
-            f"H{harmonic}",
+            f"H{harmonic}\n{frequency:.1f} Hz",
             ha="center",
             va="top",
             fontsize=8,
