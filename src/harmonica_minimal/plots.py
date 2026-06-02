@@ -65,17 +65,18 @@ def _spectrum_db(signal: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, n
 def _mark_harmonics(ax: plt.Axes, f0_hz: float) -> None:
     if f0_hz <= 0.0:
         return
-    ymin, ymax = ax.get_ylim()
     for harmonic in range(1, 4):
         frequency = harmonic * f0_hz
         if frequency > ax.get_xlim()[1]:
             continue
         ax.axvline(frequency, color="#555555", linewidth=0.8, linestyle=":", alpha=0.75)
-        ax.text(
-            frequency,
-            ymax - 0.08 * (ymax - ymin),
-            f"H{harmonic}\n{frequency:.1f} Hz",
-            ha="center",
+        ax.annotate(
+            f"H{harmonic} {frequency:.1f} Hz",
+            xy=(frequency, 0.96),
+            xycoords=ax.get_xaxis_transform(),
+            xytext=(6, 0),
+            textcoords="offset points",
+            ha="left",
             va="top",
             fontsize=8,
             color="#333333",
