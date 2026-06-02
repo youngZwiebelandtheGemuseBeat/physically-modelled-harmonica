@@ -21,8 +21,8 @@ from harmonica_minimal.output import (
     write_trace_csv,
 )
 from harmonica_minimal.parameters import SimulationConfig
-from harmonica_minimal.plots import write_validation_plot
-from harmonica_minimal.simulate import simulate_note
+from harmonica_minimal.plots import plot_presentation_pressure_result, write_tract_load_effect_plot, write_validation_plot
+from harmonica_minimal.simulate import SimulationResult, simulate_note
 
 
 def parse_args() -> argparse.Namespace:
@@ -87,7 +87,7 @@ def display_path(path: Path) -> str:
         return str(path)
 
 
-def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> None:
+def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> SimulationResult:
     config = SimulationConfig(duration_s=args.duration)
     motion_enabled = args.motion_flow == "on"
     result = simulate_note(
@@ -102,6 +102,7 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> None:
     wav_path = output_dir / f"{mode}_pressure.wav"
     trace_path = output_dir / f"{mode}_trace.csv"
     plot_path = output_dir / f"{mode}_validation.png"
+    presentation_plot_path = output_dir / f"{mode}_presentation_pressure.png"
     diagnostics_path = output_dir / f"{mode}_diagnostics.txt"
 
     dc_block_cutoff = args.wav_dc_block_cutoff if args.wav_dc_block else None
@@ -115,13 +116,43 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> None:
     write_pressure_wav(wav_path, result, dc_block_cutoff)
     write_trace_csv(trace_path, result)
     write_validation_plot(plot_path, result)
+    plot_presentation_pressure_result(presentation_plot_path, result)
     report = write_diagnostics(diagnostics_path, result, final_audio, wav_processing)
 
     print(report)
     print(f"wrote {display_path(wav_path)}")
     print(f"wrote {display_path(trace_path)}")
     print(f"wrote {display_path(plot_path)}")
+    print(f"wrote {display_path(presentation_plot_path)}")
     print(f"wrote {display_path(diagnostics_path)}")
+    return result
+
+
+def plot_tract_load_effect_if_available(
+    results: list[SimulationResult],
+    args: argparse.Namespace,
+    output_dir: Path,
+) -> None:
+    loaded_results = [result for result in results if result.params.vocal_tract_feedback_gain != 0.0]
+    if not loaded_results:
+        return
+
+    config = SimulationConfig(duration_s=args.duration)
+    motion_enabled = args.motion_flow == "on"
+    unloaded_results = [
+        simulate_note(
+            result.mode,
+            config=config,
+            pressure_pa=args.pressure,
+            attack_s=args.attack,
+            motion_flow_enabled=motion_enabled,
+            vocal_tract_feedback_gain=0.0,
+        )
+        for result in loaded_results
+    ]
+    plot_path = output_dir / "tract_load_effect.png"
+    write_tract_load_effect_plot(plot_path, loaded_results, unloaded_results)
+    print(f"wrote {display_path(plot_path)}")
 
 
 def main() -> None:
@@ -131,8 +162,10 @@ def main() -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     modes = ["draw", "blow"] if args.mode == "both" else [args.mode]
+    results = []
     for mode in modes:
-        run_one(mode, args, output_dir)
+        results.append(run_one(mode, args, output_dir))
+    plot_tract_load_effect_if_available(results, args, output_dir)
 
 
 if __name__ == "__main__":

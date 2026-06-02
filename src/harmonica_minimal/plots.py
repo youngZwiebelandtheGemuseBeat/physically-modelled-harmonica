@@ -98,6 +98,153 @@ def _style_spectrum_axis(ax: plt.Axes) -> None:
     ax.spines["right"].set_visible(False)
 
 
+def _presentation_f0(result: SimulationResult) -> float:
+    active_motion, _ = _active_motion(result)
+    analysis_start, analysis_stop = _analysis_window(result)
+    return estimate_fundamental_hz(active_motion[analysis_start:analysis_stop], result.sample_rate_hz)
+
+
+def plot_presentation_pressure_result(path: Path, result: SimulationResult) -> None:
+    """Generate a two-panel pressure-only result figure for seminar slides."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f0 = _presentation_f0(result)
+    start, stop = _steady_window(result, f0)
+    analysis_start, analysis_stop = _analysis_window(result)
+    time_ms = 1000.0 * (result.time_s[start:stop] - result.time_s[start])
+
+    freqs_p, spec_p = _spectrum_db(result.p_c[analysis_start:analysis_stop], result.sample_rate_hz)
+    pressure_band = freqs_p <= 4000.0
+
+    colors = {
+        "pressure": "#27805d",
+        "pressure_spectrum": "#4d4d4d",
+    }
+    mode_title = "Blow result" if result.mode == "blow" else "Draw result"
+    subtitle = f"f0 {f0:.1f} Hz | mouth pressure {result.params.mouth_pressure_pa:.0f} Pa"
+
+    with plt.rc_context(
+        {
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.labelsize": 10,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "figure.dpi": 180,
+            "savefig.dpi": 180,
+        }
+    ):
+        fig, axes = plt.subplots(
+            2,
+            1,
+            figsize=(8.8, 5.2),
+            gridspec_kw={"height_ratios": [1.0, 1.15]},
+            constrained_layout=True,
+        )
+        fig.suptitle(mode_title, fontweight="bold")
+        axes[0].set_title(subtitle)
+
+        axes[0].plot(time_ms, result.p_c[start:stop], color=colors["pressure"], linewidth=1.3)
+        axes[0].set_ylabel("chamber pressure p_c (Pa)")
+        axes[0].set_xlabel("time in steady-state window (ms)")
+        _style_time_axis(axes[0])
+        axes[0].set_xlim(float(time_ms[0]), float(time_ms[-1]) if time_ms.size > 1 else 1.0)
+
+        axes[1].plot(freqs_p[pressure_band], spec_p[pressure_band], color=colors["pressure_spectrum"], linewidth=1.15)
+        axes[1].set_title("chamber pressure spectrum")
+        axes[1].set_ylabel("p_c (dB)")
+        axes[1].set_xlabel("frequency (Hz)")
+        _style_spectrum_axis(axes[1])
+        _mark_harmonics(axes[1], f0)
+
+        fig.savefig(path)
+        plt.close(fig)
+
+
+def write_tract_load_effect_plot(
+    path: Path,
+    loaded_results: list[SimulationResult],
+    unloaded_results: list[SimulationResult],
+) -> None:
+    """Compare chamber pressure spectra with tract loading on and off."""
+
+    pairs = []
+    unloaded_by_mode = {result.mode: result for result in unloaded_results}
+    for loaded in loaded_results:
+        unloaded = unloaded_by_mode.get(loaded.mode)
+        if unloaded is not None:
+            pairs.append((loaded, unloaded))
+    if not pairs:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    colors = {
+        "loaded": "#27805d",
+        "unloaded": "#6b7280",
+    }
+
+    with plt.rc_context(
+        {
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.labelsize": 10,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "figure.dpi": 180,
+            "savefig.dpi": 180,
+        }
+    ):
+        fig, axes = plt.subplots(
+            len(pairs),
+            1,
+            figsize=(8.8, 3.2 * len(pairs)),
+            squeeze=False,
+            constrained_layout=True,
+        )
+        fig.suptitle("Tract-load effect", fontweight="bold")
+
+        for ax, (loaded, unloaded) in zip(axes[:, 0], pairs):
+            f0 = _presentation_f0(loaded)
+            analysis_start, analysis_stop = _analysis_window(loaded)
+            freqs_loaded, spec_loaded = _spectrum_db(
+                loaded.p_c[analysis_start:analysis_stop],
+                loaded.sample_rate_hz,
+            )
+
+            off_start, off_stop = _analysis_window(unloaded)
+            freqs_unloaded, spec_unloaded = _spectrum_db(
+                unloaded.p_c[off_start:off_stop],
+                unloaded.sample_rate_hz,
+            )
+            loaded_band = freqs_loaded <= 4000.0
+            unloaded_band = freqs_unloaded <= 4000.0
+
+            ax.plot(
+                freqs_unloaded[unloaded_band],
+                spec_unloaded[unloaded_band],
+                color=colors["unloaded"],
+                linewidth=1.05,
+                linestyle="--",
+                label="tract-load off",
+            )
+            ax.plot(
+                freqs_loaded[loaded_band],
+                spec_loaded[loaded_band],
+                color=colors["loaded"],
+                linewidth=1.15,
+                label="tract-load on",
+            )
+            ax.set_title(f"{loaded.mode} chamber pressure spectrum | f0 {f0:.1f} Hz")
+            ax.set_ylabel("p_c (dB)")
+            ax.set_xlabel("frequency (Hz)")
+            _style_spectrum_axis(ax)
+            _mark_harmonics(ax, f0)
+            ax.legend(loc="upper right", frameon=False)
+
+        fig.savefig(path)
+        plt.close(fig)
+
+
 def write_validation_plot(path: Path, result: SimulationResult) -> None:
     """Generate the required compact validation figure."""
 
@@ -114,7 +261,8 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
     pressure_band = freqs_p <= 4000.0
 
     motion_status = "on" if result.params.motion_flow_enabled else "off"
-    load_status = "on" if result.params.vocal_tract_feedback_gain != 0.0 else "off"
+    feedback_gain = result.params.vocal_tract_feedback_gain
+    load_status = f"on eta_t={feedback_gain:.3g}" if feedback_gain != 0.0 else "off eta_t=0"
     pressure = result.params.mouth_pressure_pa
     title = (
         f"{result.mode} validation | f0 {f0:.1f} Hz | "

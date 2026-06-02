@@ -14,6 +14,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from harmonica_minimal.parameters import SimulationConfig
 from harmonica_minimal.output import diagnostics_text, low_frequency_measurements, write_trace_csv
+from harmonica_minimal.plots import plot_presentation_pressure_result, write_validation_plot
 from harmonica_minimal.simulate import simulate_note
 
 
@@ -81,3 +82,18 @@ def test_low_frequency_diagnostics_cover_required_signals() -> None:
     assert "Low-frequency/DC content, steady-state excluding attack/release:" in report
     assert "H1=f0" in report
     assert "0 Hz is the DC bin, not a harmonic" in report
+
+
+def test_presentation_plot_export_preserves_validation_plot(tmp_path: Path) -> None:
+    config = SimulationConfig(duration_s=0.18, sample_rate_hz=8_000, max_step_s=1.0 / 8_000.0)
+    result = simulate_note("blow", config=config)
+    validation_path = tmp_path / "blow_validation.png"
+    presentation_path = tmp_path / "blow_presentation_pressure.png"
+
+    write_validation_plot(validation_path, result)
+    plot_presentation_pressure_result(presentation_path, result)
+
+    assert validation_path.exists()
+    assert validation_path.stat().st_size > 0
+    assert presentation_path.exists()
+    assert presentation_path.stat().st_size > 0
