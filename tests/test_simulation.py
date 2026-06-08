@@ -14,7 +14,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from harmonica_minimal.parameters import SimulationConfig
 from harmonica_minimal.output import diagnostics_text, low_frequency_measurements, write_trace_csv
-from harmonica_minimal.plots import plot_presentation_pressure_result, write_validation_plot
+from harmonica_minimal.plots import plot_presentation_pressure_result, write_millot_style_spectra, write_validation_plot
 from harmonica_minimal.simulate import simulate_note
 
 
@@ -97,3 +97,25 @@ def test_presentation_plot_export_preserves_validation_plot(tmp_path: Path) -> N
     assert validation_path.stat().st_size > 0
     assert presentation_path.exists()
     assert presentation_path.stat().st_size > 0
+
+
+def test_millot_style_spectra_are_additional_exports(tmp_path: Path) -> None:
+    config = SimulationConfig(duration_s=0.18, sample_rate_hz=16_000, max_step_s=1.0 / 16_000.0)
+    result = simulate_note("draw", config=config)
+    validation_path = tmp_path / "draw_validation.png"
+    presentation_path = tmp_path / "draw_presentation_pressure.png"
+
+    write_validation_plot(validation_path, result)
+    plot_presentation_pressure_result(presentation_path, result)
+    write_millot_style_spectra(tmp_path, result)
+
+    reed_path = tmp_path / "draw_millot_style_reed_spectrum.png"
+    pressure_path = tmp_path / "draw_millot_style_pressure_spectrum.png"
+    assert validation_path.exists()
+    assert validation_path.stat().st_size > 0
+    assert presentation_path.exists()
+    assert presentation_path.stat().st_size > 0
+    assert reed_path.exists()
+    assert reed_path.stat().st_size > 0
+    assert pressure_path.exists()
+    assert pressure_path.stat().st_size > 0

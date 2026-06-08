@@ -62,6 +62,20 @@ def _spectrum_db(signal: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, n
     return freqs, 20.0 * np.log10(normalized)
 
 
+def _spectrum_power_percent(signal: np.ndarray, sample_rate_hz: int) -> tuple[np.ndarray, np.ndarray]:
+    floor = 1.0e-8
+    centered = np.asarray(signal, dtype=float) - float(np.mean(signal))
+    if centered.size < 8:
+        return np.array([0.0]), np.array([floor])
+    window = np.hanning(centered.size)
+    power = np.abs(np.fft.rfft(centered * window)) ** 2
+    freqs = np.fft.rfftfreq(centered.size, 1.0 / sample_rate_hz)
+    peak = float(np.max(power))
+    if peak <= 0.0:
+        return freqs, np.full_like(freqs, floor, dtype=float)
+    return freqs, np.maximum(100.0 * power / peak, floor)
+
+
 def _mark_harmonics(ax: plt.Axes, f0_hz: float) -> None:
     if f0_hz <= 0.0:
         return
@@ -102,6 +116,58 @@ def _presentation_f0(result: SimulationResult) -> float:
     active_motion, _ = _active_motion(result)
     analysis_start, analysis_stop = _analysis_window(result)
     return estimate_fundamental_hz(active_motion[analysis_start:analysis_stop], result.sample_rate_hz)
+
+
+def _write_millot_style_spectrum_plot(path: Path, signal: np.ndarray, sample_rate_hz: int) -> None:
+    freqs, power_percent = _spectrum_power_percent(signal, sample_rate_hz)
+    band = freqs <= 8000.0
+
+    with plt.rc_context(
+        {
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.labelsize": 10,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "figure.dpi": 180,
+            "savefig.dpi": 180,
+        }
+    ):
+        fig, ax = plt.subplots(figsize=(7.2, 4.0), constrained_layout=True)
+        ax.plot(freqs[band], power_percent[band], color="black", linewidth=0.75)
+        ax.set_title("normalized power spectrum (% max.)")
+        ax.set_xlabel("frequency (Hz)")
+        ax.set_ylabel("power (% max.)")
+        ax.set_xlim(0.0, 8000.0)
+        ax.set_yscale("log")
+        ax.set_ylim(1.0e-8, 1.0e2)
+        ax.set_xticks(np.arange(0.0, 8001.0, 1000.0))
+        ax.grid(axis="x", color="black", linestyle=":", linewidth=0.55, alpha=0.45)
+        ax.grid(axis="y", color="#cfcfcf", linestyle=":", linewidth=0.45, alpha=0.6)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.savefig(path)
+        plt.close(fig)
+
+
+def write_millot_style_spectra(output_dir: Path, result: SimulationResult) -> None:
+    """Write Millot-style comparison spectra for active reed motion and chamber pressure."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    active_motion, _ = _active_motion(result)
+    analysis_start, analysis_stop = _analysis_window(result)
+    mode = result.mode
+
+    _write_millot_style_spectrum_plot(
+        output_dir / f"{mode}_millot_style_reed_spectrum.png",
+        active_motion[analysis_start:analysis_stop],
+        result.sample_rate_hz,
+    )
+    _write_millot_style_spectrum_plot(
+        output_dir / f"{mode}_millot_style_pressure_spectrum.png",
+        result.p_c[analysis_start:analysis_stop],
+        result.sample_rate_hz,
+    )
 
 
 def plot_presentation_pressure_result(path: Path, result: SimulationResult) -> None:

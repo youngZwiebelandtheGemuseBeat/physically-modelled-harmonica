@@ -21,7 +21,12 @@ from harmonica_minimal.output import (
     write_trace_csv,
 )
 from harmonica_minimal.parameters import SimulationConfig
-from harmonica_minimal.plots import plot_presentation_pressure_result, write_tract_load_effect_plot, write_validation_plot
+from harmonica_minimal.plots import (
+    plot_presentation_pressure_result,
+    write_millot_style_spectra,
+    write_tract_load_effect_plot,
+    write_validation_plot,
+)
 from harmonica_minimal.simulate import SimulationResult, simulate_note
 
 
@@ -117,6 +122,7 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
     write_trace_csv(trace_path, result)
     write_validation_plot(plot_path, result)
     plot_presentation_pressure_result(presentation_plot_path, result)
+    write_millot_style_spectra(output_dir, result)
     report = write_diagnostics(diagnostics_path, result, final_audio, wav_processing)
 
     print(report)
@@ -124,6 +130,8 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
     print(f"wrote {display_path(trace_path)}")
     print(f"wrote {display_path(plot_path)}")
     print(f"wrote {display_path(presentation_plot_path)}")
+    print(f"wrote {display_path(output_dir / f'{mode}_millot_style_reed_spectrum.png')}")
+    print(f"wrote {display_path(output_dir / f'{mode}_millot_style_pressure_spectrum.png')}")
     print(f"wrote {display_path(diagnostics_path)}")
     return result
 
