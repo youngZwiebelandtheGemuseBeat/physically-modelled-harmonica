@@ -18,12 +18,15 @@ from harmonica_minimal.output import (
     rendered_audio_signal,
     write_diagnostics,
     write_pressure_wav,
+    write_source_validation_report,
     write_trace_csv,
+    write_validation_metrics_json,
 )
-from harmonica_minimal.parameters import SimulationConfig
+from harmonica_minimal.parameters import OPENING_MODELS, PARAMETER_PRESETS, SOURCE_VALIDATIONS, SimulationConfig
 from harmonica_minimal.plots import (
     plot_presentation_pressure_result,
     write_millot_style_spectra,
+    write_source_validation_plot,
     write_tract_load_effect_plot,
     write_validation_plot,
 )
@@ -38,10 +41,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attack", type=float, default=None, help="Attack time in seconds.")
     parser.add_argument("--motion-flow", choices=["on", "off"], default="off")
     parser.add_argument(
+        "--parameter-preset",
+        choices=PARAMETER_PRESETS,
+        default="generic_default",
+        help=(
+            "Parameter set. generic_default is the audible prototype; "
+            "millot_channel4_4b is an experimental source-validation preset."
+        ),
+    )
+    parser.add_argument(
         "--opening-model",
-        choices=["clipped", "through_slot"],
-        default="clipped",
-        help="Reed opening approximation. Defaults to the original clipped effective gap.",
+        choices=OPENING_MODELS,
+        default=None,
+        help=(
+            "Override the preset opening law. Generic defaults to clipped; "
+            "the experimental Millot validation preset defaults to calibrated."
+        ),
+    )
+    parser.add_argument(
+        "--source-validation",
+        choices=tuple(SOURCE_VALIDATIONS),
+        default=None,
+        help="Published target set to annotate and report. Non-applicable modes are rendered without target errors.",
     )
     parser.add_argument("--tract-feedback-gain", type=float, default=None, help="Vocal tract feedback gain. Overrides vocal_tract_feedback_gain.")
     parser.add_argument(
@@ -109,6 +130,8 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
         motion_flow_enabled=motion_enabled,
         vocal_tract_feedback_gain=args.tract_feedback_gain,
         opening_model=args.opening_model,
+        parameter_preset=args.parameter_preset,
+        source_validation=args.source_validation,
     )
 
     wav_path = output_dir / f"{mode}_pressure.wav"
@@ -116,6 +139,7 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
     plot_path = output_dir / f"{mode}_validation.png"
     presentation_plot_path = output_dir / f"{mode}_presentation_pressure.png"
     diagnostics_path = output_dir / f"{mode}_diagnostics.txt"
+    metrics_path = output_dir / f"{mode}_validation_metrics.json"
 
     dc_block_cutoff = args.wav_dc_block_cutoff if args.wav_dc_block else None
     wav_processing = (
@@ -130,7 +154,13 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
     write_validation_plot(plot_path, result)
     plot_presentation_pressure_result(presentation_plot_path, result)
     write_millot_style_spectra(output_dir, result)
+    write_validation_metrics_json(metrics_path, result)
     report = write_diagnostics(diagnostics_path, result, final_audio, wav_processing)
+    if result.params.source_validation is not None:
+        source_plot_path = output_dir / f"{mode}_source_validation.png"
+        source_report_path = output_dir / "source_validation_report.md"
+        write_source_validation_plot(source_plot_path, result)
+        write_source_validation_report(source_report_path, result)
 
     print(report)
     print(f"wrote {display_path(wav_path)}")
@@ -140,6 +170,10 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
     print(f"wrote {display_path(output_dir / f'{mode}_millot_style_reed_spectrum.png')}")
     print(f"wrote {display_path(output_dir / f'{mode}_millot_style_pressure_spectrum.png')}")
     print(f"wrote {display_path(diagnostics_path)}")
+    print(f"wrote {display_path(metrics_path)}")
+    if result.params.source_validation is not None:
+        print(f"wrote {display_path(output_dir / f'{mode}_source_validation.png')}")
+        print(f"wrote {display_path(output_dir / 'source_validation_report.md')}")
     return result
 
 
@@ -163,6 +197,8 @@ def plot_tract_load_effect_if_available(
             motion_flow_enabled=motion_enabled,
             vocal_tract_feedback_gain=0.0,
             opening_model=args.opening_model,
+            parameter_preset=args.parameter_preset,
+            source_validation=args.source_validation,
         )
         for result in loaded_results
     ]

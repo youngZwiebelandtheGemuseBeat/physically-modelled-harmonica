@@ -22,6 +22,14 @@ would be refining the opening and crossing behavior, contact/loss assumptions,
 or a better documented acoustic load while keeping the solved model as the
 source.
 
+The Millot preset improves provenance but does not make every reduced closure
+source-derived. Its effective pressure-force coefficients, chamber volume,
+discharge coefficients, and calibrated through-slot constants are explicit
+`MODEL_ASSUMPTION` values selected through numerical target comparison. The
+current calibrated normal-blow result can still overpredict AC pressure,
+underpredict passive-reed motion, and leave the passive opening active for
+nearly the full cycle. These are reported mismatches, not hidden audio tuning.
+
 The current reduced vocal-tract state is simulated as a resonant pressure state
 driven by net flow. It is also coupled back into the mouth-side pressure path
 through

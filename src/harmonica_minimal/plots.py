@@ -17,7 +17,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from .output import estimate_fundamental_hz
+from .output import estimate_fundamental_hz, validation_metrics
+from .parameters import source_validation_targets
 from .simulate import SimulationResult
 
 
@@ -438,6 +439,150 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
         axes[3, 1].set_title(f"{active_label} spectrum")
         _style_spectrum_axis(axes[3, 1])
         _mark_harmonics(axes[3, 1], f0)
+
+        fig.savefig(path)
+        plt.close(fig)
+
+
+def write_source_validation_plot(path: Path, result: SimulationResult) -> None:
+    """Write an expanded physical-state plot annotated with source targets."""
+
+    targets = source_validation_targets(result.params.source_validation)
+    if targets is None:
+        raise ValueError("a source validation target is required for this plot")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    metrics = validation_metrics(result)
+    analysis_start, analysis_stop = _analysis_window(result)
+    start, stop = _steady_window(result, metrics.fundamental_hz)
+    time_ms = 1000.0 * (result.time_s[start:stop] - result.time_s[start])
+    pressure = result.p_c[start:stop]
+    pressure_ac = pressure - float(np.mean(pressure))
+    active, active_label = _active_motion(result)
+    passive = result.x_d if result.mode == "blow" else result.x_b
+
+    freqs_pressure, spec_pressure = _spectrum_db(
+        result.p_c[analysis_start:analysis_stop],
+        result.sample_rate_hz,
+    )
+    freqs_reed, spec_reed = _spectrum_db(
+        active[analysis_start:analysis_stop],
+        result.sample_rate_hz,
+    )
+    pressure_band = freqs_pressure <= 4000.0
+    reed_band = freqs_reed <= 4000.0
+
+    with plt.rc_context(
+        {
+            "font.size": 8.5,
+            "axes.titlesize": 9.5,
+            "axes.labelsize": 8.5,
+            "xtick.labelsize": 7.5,
+            "ytick.labelsize": 7.5,
+            "figure.dpi": 170,
+            "savefig.dpi": 170,
+        }
+    ):
+        fig, axes = plt.subplots(5, 2, figsize=(12.5, 12.0), constrained_layout=True)
+        fig.suptitle(
+            f"{targets.name} | preset {result.params.parameter_preset} | "
+            f"opening {result.params.opening_model}",
+            fontweight="bold",
+        )
+
+        axes[0, 0].plot(time_ms, active[start:stop] * 1e6, color="#2563a6", label=active_label)
+        active_mean_um = float(np.mean(active[start:stop])) * 1e6
+        axes[0, 0].axhline(active_mean_um + targets.active_peak_amplitude_m * 1e6, color="#777777", linestyle=":", label="Millot H1 limits")
+        axes[0, 0].axhline(active_mean_um - targets.active_peak_amplitude_m * 1e6, color="#777777", linestyle=":")
+        axes[0, 0].set_title("Active reed displacement")
+        axes[0, 0].set_ylabel("displacement (micrometer)")
+        axes[0, 0].legend(frameon=False, fontsize=7)
+
+        axes[0, 1].plot(time_ms, passive[start:stop] * 1e6, color="#b24a3b", label="passive reed")
+        passive_mean_um = float(np.mean(passive[start:stop])) * 1e6
+        axes[0, 1].axhline(passive_mean_um + targets.passive_peak_amplitude_m * 1e6, color="#777777", linestyle=":", label="Millot H2 limits")
+        axes[0, 1].axhline(passive_mean_um - targets.passive_peak_amplitude_m * 1e6, color="#777777", linestyle=":")
+        axes[0, 1].set_title("Passive reed displacement")
+        axes[0, 1].set_ylabel("displacement (micrometer)")
+        axes[0, 1].legend(frameon=False, fontsize=7)
+
+        axes[1, 0].plot(time_ms, result.z_b[start:stop] * 1e6, color="#2563a6", label="z_b")
+        axes[1, 0].axhline(targets.active_mean_opening_m * 1e6, color="#777777", linestyle=":", label="Millot upper hn0")
+        axes[1, 0].set_title("Blow/upper signed slot position")
+        axes[1, 0].set_ylabel("z_b (micrometer)")
+        axes[1, 0].legend(frameon=False, fontsize=7)
+
+        axes[1, 1].plot(time_ms, result.z_d[start:stop] * 1e6, color="#b24a3b", label="z_d")
+        axes[1, 1].axhline(targets.passive_mean_opening_m * 1e6, color="#777777", linestyle=":", label="Millot lower hn0")
+        axes[1, 1].set_title("Draw/lower signed slot position")
+        axes[1, 1].set_ylabel("z_d (micrometer)")
+        axes[1, 1].legend(frameon=False, fontsize=7)
+
+        axes[2, 0].plot(time_ms, result.area_b_pos[start:stop] * 1e6, label="positive side")
+        axes[2, 0].plot(time_ms, result.area_b_neg[start:stop] * 1e6, label="negative side")
+        axes[2, 0].plot(time_ms, result.area_b[start:stop] * 1e6, color="black", linewidth=0.9, label="total A_b")
+        axes[2, 0].set_title("Blow opening components")
+        axes[2, 0].set_ylabel("area (mm^2)")
+        axes[2, 0].legend(frameon=False, fontsize=7)
+
+        axes[2, 1].plot(time_ms, result.area_d_pos[start:stop] * 1e6, label="positive side")
+        axes[2, 1].plot(time_ms, result.area_d_neg[start:stop] * 1e6, label="negative side")
+        axes[2, 1].plot(time_ms, result.area_d[start:stop] * 1e6, color="black", linewidth=0.9, label="total A_d")
+        axes[2, 1].set_title("Draw opening components")
+        axes[2, 1].set_ylabel("area (mm^2)")
+        axes[2, 1].legend(frameon=False, fontsize=7)
+
+        axes[3, 0].plot(time_ms, pressure, color="#27805d", label="raw p_c")
+        axes[3, 0].plot(time_ms, pressure_ac, color="#7654a6", linewidth=0.9, label="AC p_c")
+        axes[3, 0].axhline(targets.mean_chamber_pressure_pa, color="#777777", linestyle=":", label="Millot mean 219 Pa")
+        axes[3, 0].set_title(
+            f"Pressure: mean {metrics.mean_chamber_pressure_pa:.1f} Pa, "
+            f"equiv. amplitude {metrics.equivalent_acoustic_amplitude_pa:.1f} Pa"
+        )
+        axes[3, 0].set_ylabel("pressure (Pa)")
+        axes[3, 0].legend(frameon=False, fontsize=7)
+
+        axes[3, 1].plot(freqs_pressure[pressure_band], spec_pressure[pressure_band], color="#4d4d4d")
+        axes[3, 1].axvline(targets.played_frequency_hz, color="#b24a3b", linestyle=":", label="Millot 401 Hz")
+        axes[3, 1].set_title("Chamber-pressure spectrum")
+        axes[3, 1].set_xlabel("frequency (Hz)")
+        axes[3, 1].set_ylabel("relative magnitude (dB)")
+        _style_spectrum_axis(axes[3, 1])
+        axes[3, 1].legend(frameon=False, fontsize=7)
+
+        axes[4, 0].plot(freqs_reed[reed_band], spec_reed[reed_band], color="#7654a6")
+        axes[4, 0].axvline(targets.played_frequency_hz, color="#b24a3b", linestyle=":", label="Millot 401 Hz")
+        axes[4, 0].set_title("Active-reed spectrum")
+        axes[4, 0].set_xlabel("frequency (Hz)")
+        axes[4, 0].set_ylabel("relative magnitude (dB)")
+        _style_spectrum_axis(axes[4, 0])
+        axes[4, 0].legend(frameon=False, fontsize=7)
+
+        axes[4, 1].axis("off")
+        ratios = metrics.pressure_harmonic_ratios
+        axes[4, 1].text(
+            0.02,
+            0.96,
+            "\n".join(
+                [
+                    f"f0 achieved / target: {metrics.fundamental_hz:.1f} / {targets.played_frequency_hz:.1f} Hz",
+                    f"active amplitude achieved / target: {metrics.active_peak_amplitude_m * 1e6:.1f} / {targets.active_peak_amplitude_m * 1e6:.1f} um",
+                    f"passive amplitude achieved / target: {metrics.passive_peak_amplitude_m * 1e6:.1f} / {targets.passive_peak_amplitude_m * 1e6:.1f} um",
+                    f"active/passive achieved / target: {metrics.active_passive_ratio:.2f} / {targets.active_passive_ratio:.2f}",
+                    f"H2/H1, H3/H1, H4/H1: {ratios[1]:.3f}, {ratios[2]:.3f}, {ratios[3]:.3f}",
+                    f"fundamental strongest: {'yes' if metrics.fundamental_is_strongest else 'no'}",
+                ]
+            ),
+            va="top",
+            family="monospace",
+        )
+
+        for ax in axes[:4, :].flat:
+            if ax is axes[3, 1]:
+                continue
+            _style_time_axis(ax)
+            ax.set_xlim(float(time_ms[0]), float(time_ms[-1]) if time_ms.size > 1 else 1.0)
+            ax.set_xlabel("time in steady-state window (ms)")
 
         fig.savefig(path)
         plt.close(fig)

@@ -63,7 +63,10 @@ Running:
 python run.py --mode draw
 python run.py --mode both --tract-feedback-gain 0.0
 python run.py --mode both --tract-feedback-gain 0.05
-python run.py --mode both --opening-model through_slot
+python run.py --mode both --opening-model through_slot_simple
+python run.py --mode blow --parameter-preset millot_channel4_4b \
+  --opening-model through_slot_calibrated \
+  --source-validation millot_normal_blow_4b
 ```
 
 The main execution path is:

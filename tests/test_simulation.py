@@ -13,7 +13,13 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from harmonica_minimal.parameters import SimulationConfig
-from harmonica_minimal.output import diagnostics_text, low_frequency_measurements, write_trace_csv
+from harmonica_minimal.output import (
+    diagnostics_text,
+    low_frequency_measurements,
+    validation_metrics,
+    write_source_validation_report,
+    write_trace_csv,
+)
 from harmonica_minimal.plots import plot_presentation_pressure_result, write_millot_style_spectra, write_validation_plot
 from harmonica_minimal.simulate import simulate_note
 
@@ -82,13 +88,32 @@ def test_effective_mouth_pressure_appears_in_trace_output(tmp_path: Path) -> Non
 def test_through_slot_simulation_is_finite_and_uses_selected_area() -> None:
     config = SimulationConfig(duration_s=0.18, sample_rate_hz=8_000, max_step_s=1.0 / 8_000.0)
 
-    result = simulate_note("draw", config=config, opening_model="through_slot")
+    result = simulate_note("draw", config=config, opening_model="through_slot_simple")
 
-    assert result.params.opening_model == "through_slot"
+    assert result.params.opening_model == "through_slot_simple"
     assert np.all(np.isfinite(result.state))
     assert np.allclose(result.area_b, result.area_b_pos + result.area_b_neg)
     assert np.allclose(result.area_d, result.area_d_pos + result.area_d_neg)
     assert float(np.max(np.abs(result.p_c))) > 1.0e-6
+
+
+def test_source_calibrated_model_is_not_always_open_and_writes_report(tmp_path: Path) -> None:
+    config = SimulationConfig(duration_s=0.45, sample_rate_hz=12_000, max_step_s=1.0 / 12_000.0)
+    result = simulate_note(
+        "blow",
+        config=config,
+        parameter_preset="millot_channel4_4b",
+        opening_model="through_slot_calibrated",
+        source_validation="millot_normal_blow_4b",
+    )
+    metrics = validation_metrics(result)
+    report_path = tmp_path / "source_validation_report.md"
+
+    write_source_validation_report(report_path, result)
+
+    assert metrics.blow_closed_percent > 1.0 or metrics.draw_closed_percent > 1.0
+    assert report_path.exists()
+    assert "SOURCE_DERIVED Parameters" in report_path.read_text()
 
 
 def test_low_frequency_diagnostics_cover_required_signals() -> None:

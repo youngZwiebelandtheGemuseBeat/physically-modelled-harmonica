@@ -9,6 +9,8 @@ It is intentionally concise. It is not a separate literature review.
 The main proposal PDF is the binding source for the implementation scope.
 Additional PDFs are used as supporting context:
 
+- Millot: equivalent reed parameters and normal-blow validation targets
+- Bahnson: reed mounting, function, primacy, and vocal-tract motivation
 - Bilbao: direct numerical physical-model simulation
 - Fletcher: nonlinear musical-instrument and free-reed context
 - Rossing: general acoustics background
@@ -45,6 +47,11 @@ $$
 **Millot et al. (2001)**
 
 Supports the use of equivalent one-degree-of-freedom damped oscillators for harmonica reeds and reports that reed motion during playing is approximately sinusoidal.
+
+The `millot_channel4_4b` preset directly uses Table 3 values for `K`, `M`,
+`R`, `Q`, `fr`, and signed `h00`. Upper 4b maps to the blow reed and lower 4b
+maps to the draw reed in normal blow. Table 4 and the pressure discussion are
+represented by the `millot_normal_blow_4b` validation target.
 
 **Systemdynamik**
 
@@ -289,6 +296,8 @@ Direct numerical integration of the first-order ODE system.
 **Bilbao**
 
 Motivates direct numerical simulation in physical modeling.
+
+Bilbao is not used as a source for harmonica parameter values.
 
 **Rossing**
 

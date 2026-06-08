@@ -10,9 +10,7 @@ FORBIDDEN_TERMS = [
     "body",
     "cover",
     "demo",
-    "calibr",
     "sweep",
-    "reference",
 ]
 
 

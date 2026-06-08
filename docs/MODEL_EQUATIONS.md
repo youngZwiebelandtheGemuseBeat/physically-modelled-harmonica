@@ -54,7 +54,7 @@ where $\eta_t$ is `vocal_tract_feedback_gain`.
    A_i(x_i) = W_i \max(0, h_{i,0} + \alpha_i x_i)
    $$
 
-   The optional `through_slot` model defines signed position relative to the
+   The optional `through_slot_simple` model defines signed position relative to the
    reedplate plane,
 
    $$
@@ -72,9 +72,13 @@ where $\eta_t$ is `vocal_tract_feedback_gain`.
 
    The effective opening closes near the slot plane and can reopen after
    crossing it. Select with `--opening-model clipped` or
-   `--opening-model through_slot`. Implemented in
+   `--opening-model through_slot_simple`. The source-aware
+   `through_slot_calibrated` variant adds side-specific gains, leakage, and
+   compact threshold smoothing. Implemented in
    `harmonica_minimal.equations.opening_area`,
-   `through_slot_opening_components`, and `selected_opening_area`.
+   `through_slot_opening_components`,
+   `calibrated_through_slot_opening_components`, and
+   `selected_opening_area`.
 
 5. Bernoulli/orifice gap flow
 

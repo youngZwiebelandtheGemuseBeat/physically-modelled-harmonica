@@ -8,7 +8,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from .equations import P_C, P_T, STATE_SIZE, V_B, V_D, V_T, X_B, X_D, derived_state, state_derivative
-from .parameters import ModelParameters, SimulationConfig, parameters_for_mode
+from .parameters import OPENING_MODELS, ModelParameters, SimulationConfig, parameters_for_mode, source_validation_targets
 
 
 @dataclass(frozen=True)
@@ -78,11 +78,17 @@ def simulate_note(
     motion_flow_enabled: bool | None = None,
     vocal_tract_feedback_gain: float | None = None,
     opening_model: str | None = None,
+    parameter_preset: str = "generic_default",
+    source_validation: str | None = None,
 ) -> SimulationResult:
     """Solve the proposal ODE for one blow or draw note."""
 
-    params = parameters_for_mode(mode)
-    """Check if any parameters have been set at call"""
+    params = parameters_for_mode(mode, parameter_preset)
+    targets = source_validation_targets(source_validation)
+    if targets is not None and targets.applicable_mode != mode:
+        source_validation = None
+    params = replace(params, source_validation=source_validation)
+
     if pressure_pa is not None:
         sign = -1.0 if mode == "draw" else 1.0
         params = replace(params, mouth_pressure_pa=sign * abs(pressure_pa))
@@ -93,7 +99,9 @@ def simulate_note(
     if vocal_tract_feedback_gain is not None:
         params = replace(params, vocal_tract_feedback_gain=vocal_tract_feedback_gain)
     if opening_model is not None:
-        if opening_model not in {"clipped", "through_slot"}:
+        if opening_model == "through_slot":
+            opening_model = "through_slot_simple"
+        if opening_model not in OPENING_MODELS:
             raise ValueError(f"unknown opening model: {opening_model}")
         params = replace(params, opening_model=opening_model)
 

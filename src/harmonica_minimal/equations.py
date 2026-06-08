@@ -97,7 +97,7 @@ def through_slot_opening_components(
     displacement_m: float,
     reed: ReedParameters,
 ) -> tuple[float, float, float]:
-    """Return signed position and positive/negative through-slot opening areas.
+    """Return the legacy simple positive/negative through-slot opening areas.
 
     The clipped model is a one-sided effective-gap approximation. This reduced
     alternative closes near the slot plane and reopens after the reed crosses
@@ -114,14 +114,75 @@ def through_slot_opening_components(
     )
 
 
+def smooth_max(value: float, smoothing_half_width: float) -> float:
+    """Compact C1 approximation to max(0, value).
+
+    Unlike a softplus or square-root approximation, this function is exactly
+    zero below the smoothing interval and exactly linear above it.
+    """
+
+    width = max(0.0, smoothing_half_width)
+    if width == 0.0:
+        return max(0.0, value)
+    if value <= -width:
+        return 0.0
+    if value >= width:
+        return value
+    return (value + width) ** 2 / (4.0 * width)
+
+
+def calibrated_through_slot_opening_components(
+    displacement_m: float,
+    reed: ReedParameters,
+) -> tuple[float, float, float]:
+    """Return gain-scaled, smoothed positive/negative opening areas.
+
+    Thresholds, gains, smoothing, and leakage are reduced-model assumptions,
+    not values attributed to Millot or Bahnson. Leakage is added only by
+    ``selected_opening_area`` and is not assigned to either opening side.
+    """
+
+    z_m = signed_reed_position(displacement_m, reed)
+    positive_height_m = smooth_max(
+        z_m - reed.through_slot_positive_threshold_m,
+        reed.threshold_smoothing_m,
+    )
+    negative_height_m = smooth_max(
+        -z_m - reed.through_slot_negative_threshold_m,
+        reed.threshold_smoothing_m,
+    )
+    return (
+        z_m,
+        reed.slot_width_m * reed.through_slot_positive_gain * positive_height_m,
+        reed.slot_width_m * reed.through_slot_negative_gain * negative_height_m,
+    )
+
+
+def selected_opening_components(
+    displacement_m: float,
+    reed: ReedParameters,
+    opening_model: str,
+) -> tuple[float, float, float]:
+    """Return signed position plus side-specific areas for diagnostics."""
+
+    if opening_model == "through_slot_calibrated":
+        return calibrated_through_slot_opening_components(displacement_m, reed)
+    if opening_model in {"through_slot", "through_slot_simple"}:
+        return through_slot_opening_components(displacement_m, reed)
+    if opening_model == "clipped":
+        return signed_reed_position(displacement_m, reed), opening_area(displacement_m, reed), 0.0
+    raise ValueError(f"unknown opening model: {opening_model}")
+
+
 def selected_opening_area(displacement_m: float, reed: ReedParameters, opening_model: str) -> float:
     """Evaluate the selected clipped or signed through-slot opening model."""
 
     if opening_model == "clipped":
         return opening_area(displacement_m, reed)
-    if opening_model == "through_slot":
-        _z_m, area_pos_m2, area_neg_m2 = through_slot_opening_components(displacement_m, reed)
-        return area_pos_m2 + area_neg_m2
+    if opening_model in {"through_slot", "through_slot_simple", "through_slot_calibrated"}:
+        _z_m, area_pos_m2, area_neg_m2 = selected_opening_components(displacement_m, reed, opening_model)
+        leakage = reed.leakage_area_m2 if opening_model == "through_slot_calibrated" else 0.0
+        return max(0.0, area_pos_m2 + area_neg_m2 + leakage)
     raise ValueError(f"unknown opening model: {opening_model}")
 
 
@@ -186,8 +247,16 @@ def derived_state(t_s: float, duration_s: float, state: np.ndarray, params: Mode
 
     gap_b = reed_gap(float(x_b), params.blow_reed)
     gap_d = reed_gap(float(x_d), params.draw_reed)
-    z_b, area_b_pos, area_b_neg = through_slot_opening_components(float(x_b), params.blow_reed)
-    z_d, area_d_pos, area_d_neg = through_slot_opening_components(float(x_d), params.draw_reed)
+    z_b, area_b_pos, area_b_neg = selected_opening_components(
+        float(x_b),
+        params.blow_reed,
+        params.opening_model,
+    )
+    z_d, area_d_pos, area_d_neg = selected_opening_components(
+        float(x_d),
+        params.draw_reed,
+        params.opening_model,
+    )
     area_b = selected_opening_area(float(x_b), params.blow_reed, params.opening_model)
     area_d = selected_opening_area(float(x_d), params.draw_reed, params.opening_model)
 

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+import json
+from math import sqrt
 from pathlib import Path
 import wave
 
 import numpy as np
 
+from .parameters import ParameterCategory, source_validation_targets
 from .simulate import SimulationResult
 
 
@@ -40,6 +43,8 @@ TRACE_COLUMNS = [
     "opening_side_b",
     "opening_side_d",
     "opening_model",
+    "parameter_preset",
+    "source_validation",
     "delta_p_b",
     "delta_p_d",
     "q_b_gap",
@@ -71,6 +76,33 @@ class SignalMeasurement:
     unit: str
     full: LowFrequencyStats
     steady: LowFrequencyStats
+
+
+@dataclass(frozen=True)
+class ValidationMetrics:
+    """Source-comparison measurements derived only from simulated states."""
+
+    fundamental_hz: float
+    mean_chamber_pressure_pa: float
+    ac_pressure_rms_pa: float
+    equivalent_acoustic_amplitude_pa: float
+    active_peak_amplitude_m: float
+    passive_peak_amplitude_m: float
+    active_passive_ratio: float
+    active_mean_position_m: float
+    passive_mean_position_m: float
+    blow_positive_open_percent: float
+    blow_negative_open_percent: float
+    blow_closed_percent: float
+    draw_positive_open_percent: float
+    draw_negative_open_percent: float
+    draw_closed_percent: float
+    blow_crosses_slot_plane: bool
+    draw_crosses_slot_plane: bool
+    pressure_harmonic_ratios: tuple[float, ...]
+    fundamental_is_strongest: bool
+    passive_reed_dominates: bool
+    through_slot_almost_always_open: bool
 
 
 def selected_output_signal(result: SimulationResult) -> np.ndarray:
@@ -144,7 +176,7 @@ def write_trace_csv(path: Path, result: SimulationResult) -> None:
     """Write the required state and derived-flow trace."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    if result.params.opening_model == "through_slot":
+    if result.params.opening_model.startswith("through_slot"):
         opening_side_b = np.where(result.area_b_pos > 0.0, 1, np.where(result.area_b_neg > 0.0, -1, 0))
         opening_side_d = np.where(result.area_d_pos > 0.0, 1, np.where(result.area_d_neg > 0.0, -1, 0))
     else:
@@ -175,6 +207,8 @@ def write_trace_csv(path: Path, result: SimulationResult) -> None:
         opening_side_b,
         opening_side_d,
         [result.params.opening_model] * len(result.time_s),
+        [result.params.parameter_preset] * len(result.time_s),
+        [result.params.source_validation or "none"] * len(result.time_s),
         result.delta_p_b,
         result.delta_p_d,
         result.q_b_gap,
@@ -201,7 +235,10 @@ def estimate_fundamental_hz(signal: np.ndarray, sample_rate_hz: int) -> float:
     window = np.hanning(centered.size)
     magnitudes = np.abs(np.fft.rfft(centered * window))
     freqs = np.fft.rfftfreq(centered.size, 1.0 / sample_rate_hz)
-    band = (freqs >= 60.0) & (freqs <= 2000.0)
+    # This prototype models channel-4 reeds near 400 Hz. Excluding sub-150 Hz
+    # envelope and slow-equilibrium components prevents them being mislabeled
+    # as the played fundamental.
+    band = (freqs >= 150.0) & (freqs <= 2000.0)
     if not np.any(band):
         return 0.0
     index = int(np.argmax(magnitudes[band]))
@@ -227,6 +264,99 @@ def harmonic_ratios(signal: np.ndarray, sample_rate_hz: int, f0_hz: float, count
         values.append(float(magnitudes[idx]))
     h1 = values[0] if values and values[0] > 0.0 else 1.0
     return [value / h1 for value in values]
+
+
+def _crosses_zero(values: np.ndarray) -> bool:
+    return bool(values.size and np.min(values) <= 0.0 <= np.max(values))
+
+
+def _side_percentages(area_pos: np.ndarray, area_neg: np.ndarray) -> tuple[float, float, float]:
+    positive = area_pos > 0.0
+    negative = area_neg > 0.0
+    closed = ~(positive | negative)
+    return (
+        float(100.0 * np.mean(positive)),
+        float(100.0 * np.mean(negative)),
+        float(100.0 * np.mean(closed)),
+    )
+
+
+def validation_metrics(result: SimulationResult) -> ValidationMetrics:
+    """Measure source-comparison quantities in the steady-state window."""
+
+    start, stop = _steady_region(result)
+    if result.mode == "draw":
+        active = result.x_d[start:stop]
+        passive = result.x_b[start:stop]
+        active_position = result.z_d[start:stop]
+        passive_position = result.z_b[start:stop]
+    else:
+        active = result.x_b[start:stop]
+        passive = result.x_d[start:stop]
+        active_position = result.z_b[start:stop]
+        passive_position = result.z_d[start:stop]
+
+    pressure = result.p_c[start:stop]
+    f0 = estimate_fundamental_hz(active, result.sample_rate_hz)
+    pressure_ratios = tuple(harmonic_ratios(pressure, result.sample_rate_hz, f0))
+    active_amplitude = 0.5 * float(np.ptp(active)) if active.size else 0.0
+    passive_amplitude = 0.5 * float(np.ptp(passive)) if passive.size else 0.0
+    pressure_mean = float(np.mean(pressure)) if pressure.size else 0.0
+    pressure_ac_rms = (
+        float(np.sqrt(np.mean((pressure - pressure_mean) ** 2)))
+        if pressure.size
+        else 0.0
+    )
+
+    blow_pos, blow_neg, blow_closed = _side_percentages(
+        result.area_b_pos[start:stop],
+        result.area_b_neg[start:stop],
+    )
+    draw_pos, draw_neg, draw_closed = _side_percentages(
+        result.area_d_pos[start:stop],
+        result.area_d_neg[start:stop],
+    )
+    if result.params.opening_model == "clipped":
+        blow_pos, blow_neg, blow_closed = _side_percentages(
+            result.area_b[start:stop],
+            np.zeros_like(result.area_b[start:stop]),
+        )
+        draw_pos, draw_neg, draw_closed = _side_percentages(
+            result.area_d[start:stop],
+            np.zeros_like(result.area_d[start:stop]),
+        )
+
+    active_passive_ratio = active_amplitude / passive_amplitude if passive_amplitude > 0.0 else 0.0
+    return ValidationMetrics(
+        fundamental_hz=f0,
+        mean_chamber_pressure_pa=pressure_mean,
+        ac_pressure_rms_pa=pressure_ac_rms,
+        equivalent_acoustic_amplitude_pa=sqrt(2.0) * pressure_ac_rms,
+        active_peak_amplitude_m=active_amplitude,
+        passive_peak_amplitude_m=passive_amplitude,
+        active_passive_ratio=active_passive_ratio,
+        active_mean_position_m=float(np.mean(active_position)) if active_position.size else 0.0,
+        passive_mean_position_m=float(np.mean(passive_position)) if passive_position.size else 0.0,
+        blow_positive_open_percent=blow_pos,
+        blow_negative_open_percent=blow_neg,
+        blow_closed_percent=blow_closed,
+        draw_positive_open_percent=draw_pos,
+        draw_negative_open_percent=draw_neg,
+        draw_closed_percent=draw_closed,
+        blow_crosses_slot_plane=_crosses_zero(result.z_b[start:stop]),
+        draw_crosses_slot_plane=_crosses_zero(result.z_d[start:stop]),
+        pressure_harmonic_ratios=pressure_ratios,
+        fundamental_is_strongest=bool(
+            pressure_ratios
+            and pressure_ratios[0] > 0.0
+            and max(pressure_ratios[1:], default=0.0) <= pressure_ratios[0]
+        ),
+        passive_reed_dominates=passive_amplitude > active_amplitude,
+        through_slot_almost_always_open=bool(
+            result.params.opening_model.startswith("through_slot")
+            and (blow_closed < 1.0 or draw_closed < 1.0)
+        ),
+    )
 
 
 def _steady_region(result: SimulationResult) -> tuple[int, int]:
@@ -402,7 +532,9 @@ def diagnostics_text(
     active_window = active[start:stop]
     passive_window = passive[start:stop]
 
-    f0 = estimate_fundamental_hz(active_window, result.sample_rate_hz)
+    metrics = validation_metrics(result)
+    targets = source_validation_targets(result.params.source_validation)
+    f0 = metrics.fundamental_hz
     active_rms = float(np.sqrt(np.mean(active_window ** 2)))
     passive_rms = float(np.sqrt(np.mean(passive_window ** 2)))
     pressure_rms = float(np.sqrt(np.mean(p_window ** 2)))
@@ -417,28 +549,6 @@ def diagnostics_text(
 
     near_b = float(100.0 * np.mean(result.gap_b[start:stop] <= 1.0e-6))
     near_d = float(100.0 * np.mean(result.gap_d[start:stop] <= 1.0e-6))
-
-    def crosses_zero(values: np.ndarray) -> bool:
-        return bool(values.size and np.min(values) <= 0.0 <= np.max(values))
-
-    def side_percentages(area_pos: np.ndarray, area_neg: np.ndarray) -> tuple[float, float, float]:
-        positive = area_pos > 0.0
-        negative = area_neg > 0.0
-        closed = ~(positive | negative)
-        return (
-            float(100.0 * np.mean(positive)),
-            float(100.0 * np.mean(negative)),
-            float(100.0 * np.mean(closed)),
-        )
-
-    if result.params.opening_model == "through_slot":
-        blow_pos, blow_neg, blow_closed = side_percentages(result.area_b_pos, result.area_b_neg)
-        draw_pos, draw_neg, draw_closed = side_percentages(result.area_d_pos, result.area_d_neg)
-    else:
-        zeros_b = np.zeros_like(result.area_b)
-        zeros_d = np.zeros_like(result.area_d)
-        blow_pos, blow_neg, blow_closed = side_percentages(result.area_b, zeros_b)
-        draw_pos, draw_neg, draw_closed = side_percentages(result.area_d, zeros_d)
     motion_total = float(np.sqrt(np.mean(result.q_b_motion[start:stop] ** 2 + result.q_d_motion[start:stop] ** 2)))
     flow_total = float(np.sqrt(np.mean(result.q_b_total[start:stop] ** 2 + result.q_d_total[start:stop] ** 2)))
     motion_ratio = motion_total / flow_total if flow_total > 0.0 else 0.0
@@ -452,7 +562,9 @@ def diagnostics_text(
 
     lines = [
         f"mode: {result.mode}",
+        f"parameter preset: {result.params.parameter_preset}",
         f"opening model: {result.params.opening_model}",
+        f"source validation: {result.params.source_validation or 'none'}",
         f"estimated fundamental frequency: {f0:.2f} Hz",
         "harmonic labels: H1=f0, H2=2*f0, etc.; 0 Hz is the DC bin, not a harmonic.",
         f"active reed estimate: {active_name}",
@@ -462,18 +574,28 @@ def diagnostics_text(
         f"RMS p_t: {p_t_rms:.6g} Pa",
         f"RMS p_m_effective - p_m_static: {load_rms:.6g} Pa",
         f"active/passive RMS displacement ratio: {active_rms / passive_rms if passive_rms > 0.0 else 0.0:.3f}",
+        f"active reed peak amplitude: {metrics.active_peak_amplitude_m * 1.0e6:.3f} micrometer",
+        f"passive reed peak amplitude: {metrics.passive_peak_amplitude_m * 1.0e6:.3f} micrometer",
+        f"active/passive peak amplitude ratio: {metrics.active_passive_ratio:.3f}",
+        f"mean chamber pressure: {metrics.mean_chamber_pressure_pa:.6g} Pa",
+        f"AC chamber pressure RMS: {metrics.ac_pressure_rms_pa:.6g} Pa",
+        f"equivalent acoustic pressure amplitude sqrt(2)*AC_RMS: {metrics.equivalent_acoustic_amplitude_pa:.6g} Pa",
         f"chamber pressure RMS: {pressure_rms:.6g} Pa",
         f"chamber pressure peak: {pressure_peak:.6g} Pa",
         f"chamber pressure crest factor: {crest:.3f}",
-        f"blow signed position crosses zero: {'yes' if crosses_zero(result.z_b) else 'no'}",
-        f"draw signed position crosses zero: {'yes' if crosses_zero(result.z_d) else 'no'}",
-        f"blow positive-side open percentage: {blow_pos:.2f}%",
-        f"blow negative-side open percentage: {blow_neg:.2f}%",
-        f"blow closed percentage: {blow_closed:.2f}%",
-        f"draw positive-side open percentage: {draw_pos:.2f}%",
-        f"draw negative-side open percentage: {draw_neg:.2f}%",
-        f"draw closed percentage: {draw_closed:.2f}%",
+        f"blow signed position crosses zero: {'yes' if metrics.blow_crosses_slot_plane else 'no'}",
+        f"draw signed position crosses zero: {'yes' if metrics.draw_crosses_slot_plane else 'no'}",
+        f"blow positive-side open percentage: {metrics.blow_positive_open_percent:.2f}%",
+        f"blow negative-side open percentage: {metrics.blow_negative_open_percent:.2f}%",
+        f"blow closed percentage: {metrics.blow_closed_percent:.2f}%",
+        f"draw positive-side open percentage: {metrics.draw_positive_open_percent:.2f}%",
+        f"draw negative-side open percentage: {metrics.draw_negative_open_percent:.2f}%",
+        f"draw closed percentage: {metrics.draw_closed_percent:.2f}%",
         "p_c harmonic ratios H1-H10: " + ", ".join(f"{value:.3f}" for value in p_ratios),
+        f"pressure H2/H1: {p_ratios[1] if len(p_ratios) > 1 else 0.0:.3f}",
+        f"pressure H3/H1: {p_ratios[2] if len(p_ratios) > 2 else 0.0:.3f}",
+        f"pressure H4/H1: {p_ratios[3] if len(p_ratios) > 3 else 0.0:.3f}",
+        f"pressure fundamental is strongest harmonic: {'yes' if metrics.fundamental_is_strongest else 'no'}",
         "active reed harmonic ratios H1-H10: " + ", ".join(f"{value:.3f}" for value in reed_ratios),
         f"pressure peak sharpness: {sharpness:.3f}",
         f"near-closed percentage blow reed: {near_b:.2f}%",
@@ -482,8 +604,43 @@ def diagnostics_text(
         "q_loss in net-flow diagnosis: 0 (no separate loss flow is implemented in this model).",
         f"steady-state diagnosis window: {steady_start_s:.6g} s to {steady_stop_s:.6g} s",
         "",
-        "Low-frequency/DC content, full note:",
     ]
+    if targets is not None:
+        def error(value: float, target: float) -> tuple[float, float]:
+            absolute = value - target
+            percent = 100.0 * absolute / target if target != 0.0 else 0.0
+            return absolute, percent
+
+        frequency_error = error(metrics.fundamental_hz, targets.played_frequency_hz)
+        mean_pressure_error = error(metrics.mean_chamber_pressure_pa, targets.mean_chamber_pressure_pa)
+        acoustic_error = error(
+            metrics.equivalent_acoustic_amplitude_pa,
+            targets.equivalent_acoustic_amplitude_pa,
+        )
+        ratio_error = error(metrics.active_passive_ratio, targets.active_passive_ratio)
+        lines.extend(
+            [
+                "Source validation targets and errors:",
+                f"- played frequency target: {targets.played_frequency_hz:.3f} Hz; error {frequency_error[0]:+.3f} Hz ({frequency_error[1]:+.2f}%)",
+                f"- mean chamber pressure target: {targets.mean_chamber_pressure_pa:.3f} Pa; error {mean_pressure_error[0]:+.3f} Pa ({mean_pressure_error[1]:+.2f}%)",
+                f"- equivalent acoustic amplitude target: {targets.equivalent_acoustic_amplitude_pa:.3f} Pa; error {acoustic_error[0]:+.3f} Pa ({acoustic_error[1]:+.2f}%)",
+                f"- active reed H1 target: {targets.active_peak_amplitude_m * 1.0e6:.3f} micrometer",
+                f"- passive reed H2 target: {targets.passive_peak_amplitude_m * 1.0e6:.3f} micrometer",
+                f"- active/passive target: {targets.active_passive_ratio:.3f}; error {ratio_error[0]:+.3f} ({ratio_error[1]:+.2f}%)",
+                f"- active mean playing opening target: {targets.active_mean_opening_m * 1.0e6:.3f} micrometer",
+                f"- passive mean playing opening target: {targets.passive_mean_opening_m * 1.0e6:.3f} micrometer",
+                "- qualitative target: fundamental strongest; reed motion near sinusoidal; pressure richer in harmonics.",
+                "- mechanism target: sharp pressure features are associated with reed crossing and nonlinear valve flow.",
+            ]
+        )
+        if metrics.passive_reed_dominates:
+            lines.append("WARNING: passive reed dominates the source-targeted normal-blow run.")
+        if len(p_ratios) > 1 and p_ratios[1] > 1.0:
+            lines.append("WARNING: pressure second harmonic is stronger than the fundamental.")
+        if metrics.through_slot_almost_always_open:
+            lines.append("WARNING: at least one through-slot reed path is open for more than 99% of the steady window.")
+        lines.append("")
+    lines.append("Low-frequency/DC content, full note:")
     for measurement in measurements:
         lines.append(f"- {measurement.name} [{measurement.unit}]: {_format_stats(measurement.full)}")
     lines.append("")
@@ -506,3 +663,217 @@ def write_diagnostics(
     text = diagnostics_text(result, final_audio, wav_processing)
     path.write_text(text)
     return text
+
+
+def _relative_error_percent(value: float, target: float) -> float:
+    return 100.0 * abs(value - target) / abs(target) if target != 0.0 else 0.0
+
+
+def _numeric_status(value: float, target: float, pass_percent: float, warn_percent: float) -> str:
+    error = _relative_error_percent(value, target)
+    if error <= pass_percent:
+        return "PASS"
+    if error <= warn_percent:
+        return "WARN"
+    return "FAIL"
+
+
+def _parameter_table(values: list, heading: str) -> list[str]:
+    lines = [
+        f"## {heading}",
+        "",
+        "| Parameter | SI value | Original value | Source | Note |",
+        "|---|---:|---|---|---|",
+    ]
+    for value in values:
+        note = value.note.replace("|", "/")
+        source = value.source_label.replace("|", "/")
+        lines.append(
+            f"| `{value.name}` | {value.value_si:.8g} {value.si_unit} | "
+            f"{value.original_value} {value.original_unit} | {source} | {note} |"
+        )
+    lines.append("")
+    return lines
+
+
+def source_validation_report_text(result: SimulationResult) -> str:
+    """Build a source-to-code calibration report for one targeted run."""
+
+    targets = source_validation_targets(result.params.source_validation)
+    if targets is None:
+        raise ValueError("a source validation target is required for this report")
+    metrics = validation_metrics(result)
+    source_values = [
+        value
+        for value in result.params.provenance
+        if value.category == ParameterCategory.SOURCE_DERIVED
+    ]
+    estimated_values = [
+        value
+        for value in result.params.provenance
+        if value.category == ParameterCategory.PHYSICALLY_ESTIMATED
+    ]
+    assumptions = [
+        value
+        for value in result.params.provenance
+        if value.category == ParameterCategory.MODEL_ASSUMPTION
+    ]
+
+    rows = [
+        (
+            "Played frequency",
+            f"{targets.played_frequency_hz:.3f} Hz",
+            f"{metrics.fundamental_hz:.3f} Hz",
+            _numeric_status(metrics.fundamental_hz, targets.played_frequency_hz, 2.0, 5.0),
+        ),
+        (
+            "Mean chamber pressure",
+            f"{targets.mean_chamber_pressure_pa:.3f} Pa",
+            f"{metrics.mean_chamber_pressure_pa:.3f} Pa",
+            _numeric_status(metrics.mean_chamber_pressure_pa, targets.mean_chamber_pressure_pa, 20.0, 50.0),
+        ),
+        (
+            "Equivalent acoustic amplitude",
+            f"{targets.equivalent_acoustic_amplitude_pa:.3f} Pa",
+            f"{metrics.equivalent_acoustic_amplitude_pa:.3f} Pa",
+            _numeric_status(
+                metrics.equivalent_acoustic_amplitude_pa,
+                targets.equivalent_acoustic_amplitude_pa,
+                20.0,
+                50.0,
+            ),
+        ),
+        (
+            "Active reed peak amplitude",
+            f"{targets.active_peak_amplitude_m * 1e6:.3f} micrometer",
+            f"{metrics.active_peak_amplitude_m * 1e6:.3f} micrometer",
+            _numeric_status(metrics.active_peak_amplitude_m, targets.active_peak_amplitude_m, 25.0, 60.0),
+        ),
+        (
+            "Passive reed peak amplitude",
+            f"{targets.passive_peak_amplitude_m * 1e6:.3f} micrometer",
+            f"{metrics.passive_peak_amplitude_m * 1e6:.3f} micrometer",
+            _numeric_status(metrics.passive_peak_amplitude_m, targets.passive_peak_amplitude_m, 25.0, 60.0),
+        ),
+        (
+            "Active/passive amplitude ratio",
+            f"{targets.active_passive_ratio:.3f}",
+            f"{metrics.active_passive_ratio:.3f}",
+            _numeric_status(metrics.active_passive_ratio, targets.active_passive_ratio, 25.0, 60.0),
+        ),
+        (
+            "Active mean playing opening",
+            f"{targets.active_mean_opening_m * 1e6:.3f} micrometer",
+            f"{metrics.active_mean_position_m * 1e6:.3f} micrometer",
+            _numeric_status(metrics.active_mean_position_m, targets.active_mean_opening_m, 10.0, 25.0),
+        ),
+        (
+            "Passive mean playing opening",
+            f"{targets.passive_mean_opening_m * 1e6:.3f} micrometer",
+            f"{metrics.passive_mean_position_m * 1e6:.3f} micrometer",
+            _numeric_status(metrics.passive_mean_position_m, targets.passive_mean_opening_m, 10.0, 25.0),
+        ),
+        (
+            "Fundamental strongest",
+            "yes",
+            "yes" if metrics.fundamental_is_strongest else "no",
+            "PASS" if metrics.fundamental_is_strongest else "FAIL",
+        ),
+        (
+            "Closing/speaking reed is primary",
+            "yes (Bahnson qualitative constraint)",
+            "yes" if not metrics.passive_reed_dominates else "no",
+            "PASS" if not metrics.passive_reed_dominates else "FAIL",
+        ),
+        (
+            "Through-slot path not open >99%",
+            "yes (model plausibility criterion)",
+            "yes" if not metrics.through_slot_almost_always_open else "no",
+            "PASS" if not metrics.through_slot_almost_always_open else "WARN",
+        ),
+    ]
+
+    lines = [
+        "# Source Validation Report",
+        "",
+        f"- Parameter preset: `{result.params.parameter_preset}`",
+        f"- Opening model: `{result.params.opening_model}`",
+        f"- Validation target: `{targets.name}`",
+        f"- Target source: {targets.source_label}",
+        "",
+    ]
+    lines.extend(_parameter_table(source_values, "SOURCE_DERIVED Parameters"))
+    lines.extend(_parameter_table(estimated_values, "PHYSICALLY_ESTIMATED Parameters"))
+    lines.extend(_parameter_table(assumptions, "MODEL_ASSUMPTION Parameters"))
+    lines.extend(
+        [
+            "## Target Versus Achieved",
+            "",
+            "| Criterion | Target | Achieved | Status |",
+            "|---|---:|---:|---|",
+        ]
+    )
+    lines.extend(f"| {name} | {target} | {achieved} | **{status}** |" for name, target, achieved, status in rows)
+    ratios = metrics.pressure_harmonic_ratios
+    lines.extend(
+        [
+            "",
+            "## Additional Achieved Metrics",
+            "",
+            f"- Pressure H2/H1: {ratios[1] if len(ratios) > 1 else 0.0:.4f}",
+            f"- Pressure H3/H1: {ratios[2] if len(ratios) > 2 else 0.0:.4f}",
+            f"- Pressure H4/H1: {ratios[3] if len(ratios) > 3 else 0.0:.4f}",
+            f"- Blow opening percentages (positive/negative/closed): {metrics.blow_positive_open_percent:.2f}% / {metrics.blow_negative_open_percent:.2f}% / {metrics.blow_closed_percent:.2f}%",
+            f"- Draw opening percentages (positive/negative/closed): {metrics.draw_positive_open_percent:.2f}% / {metrics.draw_negative_open_percent:.2f}% / {metrics.draw_closed_percent:.2f}%",
+            f"- Blow reed crosses slot plane: {'yes' if metrics.blow_crosses_slot_plane else 'no'}",
+            f"- Draw reed crosses slot plane: {'yes' if metrics.draw_crosses_slot_plane else 'no'}",
+            "",
+            "## Remaining Mismatch and Scope",
+            "",
+            "The report compares a reduced seven-state model with published normal-blow measurements; it is not a claim of full instrument realism. Millot directly supplies the reed oscillator values and selected validation targets. The chamber volume, effective pressure areas, slot widths, discharge coefficients, breath envelope, tract parameters, and calibrated through-slot thresholds/gains/leakage/smoothing remain assumptions unless independently measured.",
+            "",
+            "Bahnson is used for mounting, closing/opening direction, and speaking-reed plausibility, not for unsupported numerical constants. Bilbao motivates explicit states, units, stable direct integration, reproducible presets, and validation from physical states; it is not used as a harmonica-parameter source.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_source_validation_report(path: Path, result: SimulationResult) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = source_validation_report_text(result)
+    path.write_text(text)
+    return text
+
+
+def validation_metrics_dict(result: SimulationResult) -> dict[str, object]:
+    metrics = validation_metrics(result)
+    ratios = metrics.pressure_harmonic_ratios
+    return {
+        "mode": result.mode,
+        "parameter_preset": result.params.parameter_preset,
+        "opening_model": result.params.opening_model,
+        "source_validation": result.params.source_validation,
+        "fundamental_hz": metrics.fundamental_hz,
+        "mean_chamber_pressure_pa": metrics.mean_chamber_pressure_pa,
+        "ac_pressure_rms_pa": metrics.ac_pressure_rms_pa,
+        "equivalent_acoustic_amplitude_pa": metrics.equivalent_acoustic_amplitude_pa,
+        "active_peak_amplitude_um": metrics.active_peak_amplitude_m * 1e6,
+        "passive_peak_amplitude_um": metrics.passive_peak_amplitude_m * 1e6,
+        "active_passive_ratio": metrics.active_passive_ratio,
+        "pressure_h2_h1": ratios[1] if len(ratios) > 1 else 0.0,
+        "pressure_h3_h1": ratios[2] if len(ratios) > 2 else 0.0,
+        "pressure_h4_h1": ratios[3] if len(ratios) > 3 else 0.0,
+        "fundamental_is_strongest": metrics.fundamental_is_strongest,
+        "blow_positive_open_percent": metrics.blow_positive_open_percent,
+        "blow_negative_open_percent": metrics.blow_negative_open_percent,
+        "blow_closed_percent": metrics.blow_closed_percent,
+        "draw_positive_open_percent": metrics.draw_positive_open_percent,
+        "draw_negative_open_percent": metrics.draw_negative_open_percent,
+        "draw_closed_percent": metrics.draw_closed_percent,
+    }
+
+
+def write_validation_metrics_json(path: Path, result: SimulationResult) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(validation_metrics_dict(result), indent=2) + "\n")

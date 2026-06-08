@@ -17,6 +17,7 @@ from harmonica_minimal.equations import (
     blow_pressure_drop,
     blow_reed_force,
     chamber_pressure_derivative,
+    calibrated_through_slot_opening_components,
     derived_state,
     effective_mouth_pressure,
     motion_flow,
@@ -82,7 +83,17 @@ def test_opening_model_selection_preserves_clipped_default() -> None:
     reed = DRAW_PARAMETERS.draw_reed
 
     assert selected_opening_area(0.0, reed, "clipped") == opening_area(0.0, reed)
-    assert np.isclose(selected_opening_area(0.0, reed, "through_slot"), opening_area(0.0, reed))
+    assert np.isclose(selected_opening_area(0.0, reed, "through_slot_simple"), opening_area(0.0, reed))
+
+
+def test_calibrated_opening_area_is_nonnegative() -> None:
+    reed = DRAW_PARAMETERS.draw_reed
+
+    for displacement in np.linspace(-2.0e-3, 2.0e-3, 101):
+        _z, positive, negative = calibrated_through_slot_opening_components(displacement, reed)
+        assert positive >= 0.0
+        assert negative >= 0.0
+        assert selected_opening_area(displacement, reed, "through_slot_calibrated") >= 0.0
 
 
 def test_chamber_derivative_sign() -> None:
