@@ -26,6 +26,12 @@ class DerivedState:
     p_m_effective: float
     gap_b: float
     gap_d: float
+    z_b: float
+    z_d: float
+    area_b_pos: float
+    area_b_neg: float
+    area_d_pos: float
+    area_d_neg: float
     area_b: float
     area_d: float
     delta_p_b: float
@@ -79,6 +85,44 @@ def opening_area(displacement_m: float, reed: ReedParameters) -> float:
     """Opening area A_i(x_i) = W_i max(0, h_i0 + alpha_i x_i)."""
 
     return reed.slot_width_m * max(0.0, reed_gap(displacement_m, reed))
+
+
+def signed_reed_position(displacement_m: float, reed: ReedParameters) -> float:
+    """Signed reed position z_i = z_i0 + x_i relative to the reedplate plane."""
+
+    return reed.through_slot_rest_offset_m + displacement_m
+
+
+def through_slot_opening_components(
+    displacement_m: float,
+    reed: ReedParameters,
+) -> tuple[float, float, float]:
+    """Return signed position and positive/negative through-slot opening areas.
+
+    The clipped model is a one-sided effective-gap approximation. This reduced
+    alternative closes near the slot plane and reopens after the reed crosses
+    it; it does not resolve local flow, contact, leakage, or plate geometry.
+    """
+
+    z_m = signed_reed_position(displacement_m, reed)
+    positive_height_m = max(0.0, z_m - reed.through_slot_positive_threshold_m)
+    negative_height_m = max(0.0, -z_m - reed.through_slot_negative_threshold_m)
+    return (
+        z_m,
+        reed.slot_width_m * positive_height_m,
+        reed.slot_width_m * negative_height_m,
+    )
+
+
+def selected_opening_area(displacement_m: float, reed: ReedParameters, opening_model: str) -> float:
+    """Evaluate the selected clipped or signed through-slot opening model."""
+
+    if opening_model == "clipped":
+        return opening_area(displacement_m, reed)
+    if opening_model == "through_slot":
+        _z_m, area_pos_m2, area_neg_m2 = through_slot_opening_components(displacement_m, reed)
+        return area_pos_m2 + area_neg_m2
+    raise ValueError(f"unknown opening model: {opening_model}")
 
 
 def bernoulli_gap_flow(
@@ -142,8 +186,10 @@ def derived_state(t_s: float, duration_s: float, state: np.ndarray, params: Mode
 
     gap_b = reed_gap(float(x_b), params.blow_reed)
     gap_d = reed_gap(float(x_d), params.draw_reed)
-    area_b = opening_area(float(x_b), params.blow_reed)
-    area_d = opening_area(float(x_d), params.draw_reed)
+    z_b, area_b_pos, area_b_neg = through_slot_opening_components(float(x_b), params.blow_reed)
+    z_d, area_d_pos, area_d_neg = through_slot_opening_components(float(x_d), params.draw_reed)
+    area_b = selected_opening_area(float(x_b), params.blow_reed, params.opening_model)
+    area_d = selected_opening_area(float(x_d), params.draw_reed, params.opening_model)
 
     delta_p_b = blow_pressure_drop(p_m_effective, float(p_c))
     delta_p_d = float(p_c) - params.p_out_pa
@@ -174,6 +220,12 @@ def derived_state(t_s: float, duration_s: float, state: np.ndarray, params: Mode
         p_m_effective=p_m_effective,
         gap_b=gap_b,
         gap_d=gap_d,
+        z_b=z_b,
+        z_d=z_d,
+        area_b_pos=area_b_pos,
+        area_b_neg=area_b_neg,
+        area_d_pos=area_d_pos,
+        area_d_neg=area_d_neg,
         area_b=area_b,
         area_d=area_d,
         delta_p_b=delta_p_b,

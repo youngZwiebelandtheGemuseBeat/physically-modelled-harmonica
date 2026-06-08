@@ -63,11 +63,12 @@ Running:
 python run.py --mode draw
 python run.py --mode both --tract-feedback-gain 0.0
 python run.py --mode both --tract-feedback-gain 0.05
+python run.py --mode both --opening-model through_slot
 ```
 
 The main execution path is:
 
-1. `run.py` parses mode, breath options, motion-flow state, and optional tract feedback gain.
+1. `run.py` parses mode, breath options, opening model, motion-flow state, and optional tract feedback gain.
 2. `parameters_for_mode` selects draw or blow parameters.
 3. `simulate_note` integrates the ODE state.
 4. `output.py` writes normalized chamber pressure, CSV trace, and text diagnostics.
@@ -98,6 +99,10 @@ is a reduced lumped acoustic load, not a full vocal-tract geometry simulation.
 ## Output files
 
 Each run writes a WAV file, trace CSV, validation plot, and text diagnostics.
+The trace includes signed reed positions, selected opening areas, through-slot
+positive/negative components, and numeric selected-side flags (`+1`, `0`, or
+`-1`). In clipped runs the selected-side flag is only `+1` or `0`; the
+component columns remain available to inspect the alternative geometry.
 The WAV signal remains normalized chamber pressure:
 
 $$
@@ -111,8 +116,9 @@ Bernoulli/orifice flow, chamber-pressure feedback, reduced vocal-tract loading,
 and direct offline numerical integration.
 
 The remaining gap to a more realistic harmonica sound is physical refinement,
-not fake synthesis. The most important candidates are the clipped reed-opening
-and contact closure, parameter tuning for stronger nonlinear flow, and a more
-explicit acoustic load. The seminar-core branch still excludes radiation
+not fake synthesis. The optional through-slot opening is still a reduced
+closure. Its rest offsets and closing thresholds require calibration, along
+with parameter tuning for stronger nonlinear flow and a more explicit acoustic
+load. The seminar-core branch still excludes radiation
 filtering, body/cover coloration, synthetic airflow noise, samples, wavetables,
 pitch shifting, and machine learning.

@@ -29,6 +29,17 @@ TRACE_COLUMNS = [
     "v_t",
     "gap_b",
     "gap_d",
+    "z_b",
+    "z_d",
+    "area_b",
+    "area_d",
+    "area_b_pos",
+    "area_b_neg",
+    "area_d_pos",
+    "area_d_neg",
+    "opening_side_b",
+    "opening_side_d",
+    "opening_model",
     "delta_p_b",
     "delta_p_d",
     "q_b_gap",
@@ -133,6 +144,12 @@ def write_trace_csv(path: Path, result: SimulationResult) -> None:
     """Write the required state and derived-flow trace."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    if result.params.opening_model == "through_slot":
+        opening_side_b = np.where(result.area_b_pos > 0.0, 1, np.where(result.area_b_neg > 0.0, -1, 0))
+        opening_side_d = np.where(result.area_d_pos > 0.0, 1, np.where(result.area_d_neg > 0.0, -1, 0))
+    else:
+        opening_side_b = np.where(result.area_b > 0.0, 1, 0)
+        opening_side_d = np.where(result.area_d > 0.0, 1, 0)
     rows = zip(
         result.time_s,
         result.x_b,
@@ -147,6 +164,17 @@ def write_trace_csv(path: Path, result: SimulationResult) -> None:
         result.v_t,
         result.gap_b,
         result.gap_d,
+        result.z_b,
+        result.z_d,
+        result.area_b,
+        result.area_d,
+        result.area_b_pos,
+        result.area_b_neg,
+        result.area_d_pos,
+        result.area_d_neg,
+        opening_side_b,
+        opening_side_d,
+        [result.params.opening_model] * len(result.time_s),
         result.delta_p_b,
         result.delta_p_d,
         result.q_b_gap,
@@ -389,6 +417,28 @@ def diagnostics_text(
 
     near_b = float(100.0 * np.mean(result.gap_b[start:stop] <= 1.0e-6))
     near_d = float(100.0 * np.mean(result.gap_d[start:stop] <= 1.0e-6))
+
+    def crosses_zero(values: np.ndarray) -> bool:
+        return bool(values.size and np.min(values) <= 0.0 <= np.max(values))
+
+    def side_percentages(area_pos: np.ndarray, area_neg: np.ndarray) -> tuple[float, float, float]:
+        positive = area_pos > 0.0
+        negative = area_neg > 0.0
+        closed = ~(positive | negative)
+        return (
+            float(100.0 * np.mean(positive)),
+            float(100.0 * np.mean(negative)),
+            float(100.0 * np.mean(closed)),
+        )
+
+    if result.params.opening_model == "through_slot":
+        blow_pos, blow_neg, blow_closed = side_percentages(result.area_b_pos, result.area_b_neg)
+        draw_pos, draw_neg, draw_closed = side_percentages(result.area_d_pos, result.area_d_neg)
+    else:
+        zeros_b = np.zeros_like(result.area_b)
+        zeros_d = np.zeros_like(result.area_d)
+        blow_pos, blow_neg, blow_closed = side_percentages(result.area_b, zeros_b)
+        draw_pos, draw_neg, draw_closed = side_percentages(result.area_d, zeros_d)
     motion_total = float(np.sqrt(np.mean(result.q_b_motion[start:stop] ** 2 + result.q_d_motion[start:stop] ** 2)))
     flow_total = float(np.sqrt(np.mean(result.q_b_total[start:stop] ** 2 + result.q_d_total[start:stop] ** 2)))
     motion_ratio = motion_total / flow_total if flow_total > 0.0 else 0.0
@@ -402,6 +452,7 @@ def diagnostics_text(
 
     lines = [
         f"mode: {result.mode}",
+        f"opening model: {result.params.opening_model}",
         f"estimated fundamental frequency: {f0:.2f} Hz",
         "harmonic labels: H1=f0, H2=2*f0, etc.; 0 Hz is the DC bin, not a harmonic.",
         f"active reed estimate: {active_name}",
@@ -412,7 +463,16 @@ def diagnostics_text(
         f"RMS p_m_effective - p_m_static: {load_rms:.6g} Pa",
         f"active/passive RMS displacement ratio: {active_rms / passive_rms if passive_rms > 0.0 else 0.0:.3f}",
         f"chamber pressure RMS: {pressure_rms:.6g} Pa",
+        f"chamber pressure peak: {pressure_peak:.6g} Pa",
         f"chamber pressure crest factor: {crest:.3f}",
+        f"blow signed position crosses zero: {'yes' if crosses_zero(result.z_b) else 'no'}",
+        f"draw signed position crosses zero: {'yes' if crosses_zero(result.z_d) else 'no'}",
+        f"blow positive-side open percentage: {blow_pos:.2f}%",
+        f"blow negative-side open percentage: {blow_neg:.2f}%",
+        f"blow closed percentage: {blow_closed:.2f}%",
+        f"draw positive-side open percentage: {draw_pos:.2f}%",
+        f"draw negative-side open percentage: {draw_neg:.2f}%",
+        f"draw closed percentage: {draw_closed:.2f}%",
         "p_c harmonic ratios H1-H10: " + ", ".join(f"{value:.3f}" for value in p_ratios),
         "active reed harmonic ratios H1-H10: " + ", ".join(f"{value:.3f}" for value in reed_ratios),
         f"pressure peak sharpness: {sharpness:.3f}",

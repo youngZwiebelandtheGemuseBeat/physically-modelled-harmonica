@@ -48,12 +48,33 @@ where $\eta_t$ is `vocal_tract_feedback_gain`.
 
 4. Reed opening
 
+   The default `clipped` model is:
+
    $$
    A_i(x_i) = W_i \max(0, h_{i,0} + \alpha_i x_i)
    $$
 
-   Implemented in `harmonica_minimal.equations.reed_gap` and
-   `harmonica_minimal.equations.opening_area`.
+   The optional `through_slot` model defines signed position relative to the
+   reedplate plane,
+
+   $$
+   z_i = z_{i,0} + x_i,
+   $$
+
+   and opening area
+
+   $$
+   A_i(z_i) = W_i[
+   \max(0,z_i-z_{c,i,+}) +
+   \max(0,-z_i-z_{c,i,-})
+   ].
+   $$
+
+   The effective opening closes near the slot plane and can reopen after
+   crossing it. Select with `--opening-model clipped` or
+   `--opening-model through_slot`. Implemented in
+   `harmonica_minimal.equations.opening_area`,
+   `through_slot_opening_components`, and `selected_opening_area`.
 
 5. Bernoulli/orifice gap flow
 

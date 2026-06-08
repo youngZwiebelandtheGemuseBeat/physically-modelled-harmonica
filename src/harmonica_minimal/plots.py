@@ -332,7 +332,8 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
     pressure = result.params.mouth_pressure_pa
     title = (
         f"{result.mode} validation | f0 {f0:.1f} Hz | "
-        f"tract-load {load_status} | motion-flow {motion_status} | mouth pressure {pressure:.0f} Pa"
+        f"opening {result.params.opening_model} | tract-load {load_status} | "
+        f"motion-flow {motion_status} | mouth pressure {pressure:.0f} Pa"
     )
 
     colors = {
@@ -357,31 +358,55 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
         }
     ):
         fig, axes = plt.subplots(
-            6,
-            1,
-            figsize=(8.8, 10.0),
-            gridspec_kw={"height_ratios": [1.0, 1.0, 1.0, 1.0, 1.15, 1.15]},
+            4,
+            2,
+            figsize=(12.0, 10.0),
+            gridspec_kw={"height_ratios": [1.0, 1.0, 1.0, 1.15]},
             constrained_layout=True,
         )
         fig.suptitle(title, fontweight="bold")
 
-        axes[0].plot(time_ms, result.gap_b[start:stop] * 1.0e6, color=colors["blow"], linewidth=1.25)
-        axes[0].set_ylabel("blow gap\n(um)")
+        axes[0, 0].plot(time_ms, result.x_b[start:stop] * 1.0e6, color=colors["blow"], linewidth=1.1, label="x_b")
+        axes[0, 0].plot(
+            time_ms,
+            result.z_b[start:stop] * 1.0e6,
+            color=colors["mouth_static"],
+            linewidth=1.0,
+            linestyle="--",
+            label="z_b",
+        )
+        axes[0, 0].set_ylabel("blow position\n(um)")
+        axes[0, 0].legend(loc="upper right", frameon=False, fontsize=8)
 
-        axes[1].plot(time_ms, result.gap_d[start:stop] * 1.0e6, color=colors["draw"], linewidth=1.25)
-        axes[1].set_ylabel("draw gap\n(um)")
+        axes[0, 1].plot(time_ms, result.area_b[start:stop] * 1.0e6, color=colors["blow"], linewidth=1.25)
+        axes[0, 1].set_ylabel("A_b\n(mm^2)")
 
-        axes[2].plot(time_ms, result.p_c[start:stop], color=colors["pressure"], linewidth=1.25)
-        axes[2].set_ylabel("p_c\n(Pa)")
+        axes[1, 0].plot(time_ms, result.x_d[start:stop] * 1.0e6, color=colors["draw"], linewidth=1.1, label="x_d")
+        axes[1, 0].plot(
+            time_ms,
+            result.z_d[start:stop] * 1.0e6,
+            color=colors["mouth_static"],
+            linewidth=1.0,
+            linestyle="--",
+            label="z_d",
+        )
+        axes[1, 0].set_ylabel("draw position\n(um)")
+        axes[1, 0].legend(loc="upper right", frameon=False, fontsize=8)
 
-        axes[3].plot(
+        axes[1, 1].plot(time_ms, result.area_d[start:stop] * 1.0e6, color=colors["draw"], linewidth=1.25)
+        axes[1, 1].set_ylabel("A_d\n(mm^2)")
+
+        axes[2, 0].plot(time_ms, result.p_c[start:stop], color=colors["pressure"], linewidth=1.25)
+        axes[2, 0].set_ylabel("p_c\n(Pa)")
+
+        axes[2, 1].plot(
             time_ms,
             result.p_m_effective[start:stop],
             color=colors["mouth_effective"],
             linewidth=1.25,
             label="p_m_effective",
         )
-        axes[3].plot(
+        axes[2, 1].plot(
             time_ms,
             result.p_m_static[start:stop],
             color=colors["mouth_static"],
@@ -389,29 +414,30 @@ def write_validation_plot(path: Path, result: SimulationResult) -> None:
             linestyle="--",
             label="p_m_static",
         )
-        axes[3].set_ylabel("mouth pressure\n(Pa)")
-        axes[3].set_xlabel("time in steady-state window (ms)")
-        axes[3].legend(loc="upper right", frameon=False, fontsize=8)
+        axes[2, 1].set_ylabel("mouth pressure\n(Pa)")
+        axes[2, 1].legend(loc="upper right", frameon=False, fontsize=8)
 
-        for ax in axes[:4]:
+        for ax in axes[:3, :].flat:
             _style_time_axis(ax)
             ax.set_xlim(float(time_ms[0]), float(time_ms[-1]) if time_ms.size > 1 else 1.0)
-        axes[0].tick_params(labelbottom=False)
-        axes[1].tick_params(labelbottom=False)
-        axes[2].tick_params(labelbottom=False)
+        for ax in axes[:2, :].flat:
+            ax.tick_params(labelbottom=False)
+        axes[2, 0].set_xlabel("time in steady-state window (ms)")
+        axes[2, 1].set_xlabel("time in steady-state window (ms)")
 
-        axes[4].plot(freqs_p[pressure_band], spec_p[pressure_band], color=colors["pressure_spectrum"], linewidth=1.1)
-        axes[4].set_ylabel("p_c\n(dB)")
-        axes[4].set_title("chamber pressure spectrum")
-        _style_spectrum_axis(axes[4])
-        _mark_harmonics(axes[4], f0)
+        axes[3, 0].plot(freqs_p[pressure_band], spec_p[pressure_band], color=colors["pressure_spectrum"], linewidth=1.1)
+        axes[3, 0].set_ylabel("p_c\n(dB)")
+        axes[3, 0].set_xlabel("frequency (Hz)")
+        axes[3, 0].set_title("chamber pressure spectrum")
+        _style_spectrum_axis(axes[3, 0])
+        _mark_harmonics(axes[3, 0], f0)
 
-        axes[5].plot(freqs_reed[reed_band], spec_reed[reed_band], color=colors["reed_spectrum"], linewidth=1.1)
-        axes[5].set_ylabel("active reed\n(dB)")
-        axes[5].set_xlabel("frequency (Hz)")
-        axes[5].set_title(f"{active_label} spectrum")
-        _style_spectrum_axis(axes[5])
-        _mark_harmonics(axes[5], f0)
+        axes[3, 1].plot(freqs_reed[reed_band], spec_reed[reed_band], color=colors["reed_spectrum"], linewidth=1.1)
+        axes[3, 1].set_ylabel("active reed\n(dB)")
+        axes[3, 1].set_xlabel("frequency (Hz)")
+        axes[3, 1].set_title(f"{active_label} spectrum")
+        _style_spectrum_axis(axes[3, 1])
+        _mark_harmonics(axes[3, 1], f0)
 
         fig.savefig(path)
         plt.close(fig)

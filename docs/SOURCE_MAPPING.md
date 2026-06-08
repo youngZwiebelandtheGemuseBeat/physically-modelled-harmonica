@@ -108,7 +108,9 @@ $$
 
 **Fletcher / Förtsch / Millot source context**
 
-The simple opening law is a reduced representation of reed-gap geometry. It connects reed displacement to effective airflow area.
+The clipped baseline and optional signed through-slot opening laws are reduced
+representations of reed-gap geometry. They connect reed displacement to
+effective airflow area without resolving contact, leakage, or local flow.
 
 This is a modeling simplification.
 

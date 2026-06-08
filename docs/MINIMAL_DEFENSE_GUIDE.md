@@ -9,7 +9,8 @@ sound comes from solved model states.
 ## Model Assumptions
 
 - Each reed is a lumped mass-spring-damper oscillator.
-- The reed-slot opening is a linear gap law clipped at zero.
+- The default reed-slot opening is a linear gap law clipped at zero; an
+  optional signed through-slot law permits opposite-side reopening.
 - Airflow through each reed slot uses a Bernoulli/orifice approximation.
 - The chamber is a lumped acoustic compliance.
 - The vocal tract is a reduced second-order resonator driven by net reed flow.
@@ -66,7 +67,8 @@ Implemented from the proposal: reed dynamics, pressure forces, nonlinear
 Bernoulli flow, chamber-pressure feedback, the reduced vocal-tract resonator,
 and direct numerical integration.
 
-Still reduced: the reed opening/contact law is a clipped linear gap; there is
+Still reduced: the clipped baseline and signed through-slot opening laws do not
+resolve detailed contact, leakage, or local fluid dynamics; there is
 no body/cover acoustic coloration, no external radiation model, and no full
 vocal-tract geometry. These omissions should be presented as model scope, not
 as hidden defects.

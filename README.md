@@ -18,6 +18,8 @@ no samples, no wavetable synthesis, and no pitch shifting.
 .venv/bin/python run.py --mode both --motion-flow off --tract-feedback-gain 0.0 --output-dir tract_feedback_000
 .venv/bin/python run.py --mode both --motion-flow off --tract-feedback-gain 0.05 --output-dir tract_feedback_005
 .venv/bin/python run.py --mode both --motion-flow off --tract-feedback-gain 0.10 --output-dir tract_feedback_010
+.venv/bin/python run.py --mode both --opening-model clipped
+.venv/bin/python run.py --mode both --opening-model through_slot --output-dir through_slot
 ```
 
 Optional simple controls:
@@ -56,10 +58,12 @@ Bernoulli/orifice airflow, chamber-pressure feedback, a reduced vocal-tract
 resonator, and direct offline numerical integration. It is ready to demonstrate
 as a reduced proposal-based prototype.
 
-The branch does not claim commercial-quality realism. The strongest remaining
-physical simplifications are the clipped linear reed-opening/contact law, the
-absence of external radiation or body/cover acoustics, and the reduced
-one-mode vocal-tract load.
+The branch does not claim commercial-quality realism. The default opening
+remains the clipped linear effective-gap law. An optional signed through-slot
+law can close near the reedplate plane and reopen after a reed crosses it.
+Both are reduced approximations; other major simplifications are the absence
+of external radiation or body/cover acoustics and the reduced one-mode
+vocal-tract load.
 
 The main proposal PDF remains the binding model source. The newer support
 sources are used as context: Bilbao for direct numerical physical modeling,

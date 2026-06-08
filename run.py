@@ -37,6 +37,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pressure", type=float, default=None, help="Breath pressure magnitude in pascals.")
     parser.add_argument("--attack", type=float, default=None, help="Attack time in seconds.")
     parser.add_argument("--motion-flow", choices=["on", "off"], default="off")
+    parser.add_argument(
+        "--opening-model",
+        choices=["clipped", "through_slot"],
+        default="clipped",
+        help="Reed opening approximation. Defaults to the original clipped effective gap.",
+    )
     parser.add_argument("--tract-feedback-gain", type=float, default=None, help="Vocal tract feedback gain. Overrides vocal_tract_feedback_gain.")
     parser.add_argument(
         "--wav-dc-block",
@@ -102,6 +108,7 @@ def run_one(mode: str, args: argparse.Namespace, output_dir: Path) -> Simulation
         attack_s=args.attack,
         motion_flow_enabled=motion_enabled,
         vocal_tract_feedback_gain=args.tract_feedback_gain,
+        opening_model=args.opening_model,
     )
 
     wav_path = output_dir / f"{mode}_pressure.wav"
@@ -155,6 +162,7 @@ def plot_tract_load_effect_if_available(
             attack_s=args.attack,
             motion_flow_enabled=motion_enabled,
             vocal_tract_feedback_gain=0.0,
+            opening_model=args.opening_model,
         )
         for result in loaded_results
     ]

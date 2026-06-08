@@ -22,6 +22,14 @@ class SimulationResult:
     p_m_effective: np.ndarray
     gap_b: np.ndarray
     gap_d: np.ndarray
+    z_b: np.ndarray
+    z_d: np.ndarray
+    area_b_pos: np.ndarray
+    area_b_neg: np.ndarray
+    area_d_pos: np.ndarray
+    area_d_neg: np.ndarray
+    area_b: np.ndarray
+    area_d: np.ndarray
     delta_p_b: np.ndarray
     delta_p_d: np.ndarray
     q_b_gap: np.ndarray
@@ -69,6 +77,7 @@ def simulate_note(
     attack_s: float | None = None,
     motion_flow_enabled: bool | None = None,
     vocal_tract_feedback_gain: float | None = None,
+    opening_model: str | None = None,
 ) -> SimulationResult:
     """Solve the proposal ODE for one blow or draw note."""
 
@@ -83,6 +92,10 @@ def simulate_note(
         params = replace(params, motion_flow_enabled=motion_flow_enabled)
     if vocal_tract_feedback_gain is not None:
         params = replace(params, vocal_tract_feedback_gain=vocal_tract_feedback_gain)
+    if opening_model is not None:
+        if opening_model not in {"clipped", "through_slot"}:
+            raise ValueError(f"unknown opening model: {opening_model}")
+        params = replace(params, opening_model=opening_model)
 
     sample_count = int(round(config.duration_s * config.sample_rate_hz))
     time_s = np.arange(sample_count, dtype=float) / float(config.sample_rate_hz)
@@ -114,6 +127,14 @@ def simulate_note(
         p_m_effective=np.array([value.p_m_effective for value in derived], dtype=float),
         gap_b=np.array([value.gap_b for value in derived], dtype=float),
         gap_d=np.array([value.gap_d for value in derived], dtype=float),
+        z_b=np.array([value.z_b for value in derived], dtype=float),
+        z_d=np.array([value.z_d for value in derived], dtype=float),
+        area_b_pos=np.array([value.area_b_pos for value in derived], dtype=float),
+        area_b_neg=np.array([value.area_b_neg for value in derived], dtype=float),
+        area_d_pos=np.array([value.area_d_pos for value in derived], dtype=float),
+        area_d_neg=np.array([value.area_d_neg for value in derived], dtype=float),
+        area_b=np.array([value.area_b for value in derived], dtype=float),
+        area_d=np.array([value.area_d for value in derived], dtype=float),
         delta_p_b=np.array([value.delta_p_b for value in derived], dtype=float),
         delta_p_d=np.array([value.delta_p_d for value in derived], dtype=float),
         q_b_gap=np.array([value.q_b_gap for value in derived], dtype=float),

@@ -23,6 +23,7 @@ def test_simulation_produces_finite_non_silent_chamber_pressure() -> None:
 
     result = simulate_note("draw", config=config)
 
+    assert result.params.opening_model == "clipped"
     assert np.all(np.isfinite(result.p_c))
     assert float(np.max(np.abs(result.p_c))) > 1.0e-6
 
@@ -36,6 +37,14 @@ def test_trace_arrays_have_no_nan_or_inf() -> None:
         result.state,
         result.gap_b,
         result.gap_d,
+        result.z_b,
+        result.z_d,
+        result.area_b,
+        result.area_d,
+        result.area_b_pos,
+        result.area_b_neg,
+        result.area_d_pos,
+        result.area_d_neg,
         result.delta_p_b,
         result.delta_p_d,
         result.q_b_gap,
@@ -63,6 +72,23 @@ def test_effective_mouth_pressure_appears_in_trace_output(tmp_path: Path) -> Non
     assert "p_m_static" in header
     assert "p_m_effective" in header
     assert "vocal_tract_feedback_gain" in header
+    assert "z_b" in header
+    assert "z_d" in header
+    assert "area_b" in header
+    assert "area_d" in header
+    assert "opening_model" in header
+
+
+def test_through_slot_simulation_is_finite_and_uses_selected_area() -> None:
+    config = SimulationConfig(duration_s=0.18, sample_rate_hz=8_000, max_step_s=1.0 / 8_000.0)
+
+    result = simulate_note("draw", config=config, opening_model="through_slot")
+
+    assert result.params.opening_model == "through_slot"
+    assert np.all(np.isfinite(result.state))
+    assert np.allclose(result.area_b, result.area_b_pos + result.area_b_neg)
+    assert np.allclose(result.area_d, result.area_d_pos + result.area_d_neg)
+    assert float(np.max(np.abs(result.p_c))) > 1.0e-6
 
 
 def test_low_frequency_diagnostics_cover_required_signals() -> None:
@@ -82,6 +108,11 @@ def test_low_frequency_diagnostics_cover_required_signals() -> None:
     assert "Low-frequency/DC content, steady-state excluding attack/release:" in report
     assert "H1=f0" in report
     assert "0 Hz is the DC bin, not a harmonic" in report
+    assert "blow signed position crosses zero:" in report
+    assert "draw signed position crosses zero:" in report
+    assert "positive-side open percentage:" in report
+    assert "negative-side open percentage:" in report
+    assert "closed percentage:" in report
 
 
 def test_presentation_plot_export_preserves_validation_plot(tmp_path: Path) -> None:

@@ -47,8 +47,9 @@ Implemented and defensible in this branch:
 
 Deliberately reduced or absent:
 
-- the opening/contact law is a clipped linear gap, not detailed reed-plate
-  contact mechanics
+- the default opening/contact law is a clipped linear gap; the optional signed
+  through-slot law adds crossing but not detailed reed-plate contact, leakage,
+  or local fluid mechanics
 - there is no external radiation model or body/cover acoustic coloration
 - there is no full vocal-tract geometry
 - the WAV is a normalized simulated chamber-pressure signal

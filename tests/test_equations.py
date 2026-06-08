@@ -23,6 +23,9 @@ from harmonica_minimal.equations import (
     opening_area,
     P_C,
     P_T,
+    selected_opening_area,
+    signed_reed_position,
+    through_slot_opening_components,
     total_reed_flow,
 )
 from harmonica_minimal.parameters import DRAW_PARAMETERS
@@ -49,6 +52,37 @@ def test_opening_area_nonnegative() -> None:
 
     assert opening_area(0.0, reed) >= 0.0
     assert opening_area(1.0, reed) == 0.0
+
+
+def test_through_slot_opening_closes_and_reopens_on_opposite_side() -> None:
+    reed = replace(
+        DRAW_PARAMETERS.draw_reed,
+        through_slot_rest_offset_m=3.0e-6,
+        through_slot_positive_threshold_m=1.0e-6,
+        through_slot_negative_threshold_m=2.0e-6,
+    )
+
+    assert signed_reed_position(0.0, reed) == 3.0e-6
+    z_pos, area_pos, area_neg = through_slot_opening_components(0.0, reed)
+    assert z_pos == 3.0e-6
+    assert np.isclose(area_pos, reed.slot_width_m * 2.0e-6)
+    assert area_neg == 0.0
+
+    _z_closed, closed_pos, closed_neg = through_slot_opening_components(-3.0e-6, reed)
+    assert closed_pos == 0.0
+    assert closed_neg == 0.0
+
+    z_neg, negative_pos, negative_neg = through_slot_opening_components(-6.0e-6, reed)
+    assert z_neg == -3.0e-6
+    assert negative_pos == 0.0
+    assert np.isclose(negative_neg, reed.slot_width_m * 1.0e-6)
+
+
+def test_opening_model_selection_preserves_clipped_default() -> None:
+    reed = DRAW_PARAMETERS.draw_reed
+
+    assert selected_opening_area(0.0, reed, "clipped") == opening_area(0.0, reed)
+    assert np.isclose(selected_opening_area(0.0, reed, "through_slot"), opening_area(0.0, reed))
 
 
 def test_chamber_derivative_sign() -> None:

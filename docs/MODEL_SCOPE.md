@@ -90,7 +90,7 @@ This is not a CFD model.
 
 ## 4. Reed opening
 
-The opening area is modeled with a simple clipped gap law:
+The baseline opening area is the original clipped gap law:
 
 $$
 A_i(x_i) = W_i \max(0, h_{i,0} + \alpha_i x_i)
@@ -103,7 +103,30 @@ where:
 - $\alpha_i$ maps reed displacement to gap change
 - the maximum operation prevents negative geometric opening
 
-This is a deliberately simple reduced opening model.
+The optional signed through-slot law is:
+
+$$
+z_i=z_{i,0}+x_i
+$$
+
+$$
+A_i(z_i)=W_i[
+\max(0,z_i-z_{c,i,+})+
+\max(0,-z_i-z_{c,i,-})
+].
+$$
+
+Here $z_i>0$ is the outside side and $z_i<0$ is the channel side. The model
+closes within the threshold band around the slot plane and reopens on either
+side. The previous clipped model was a one-sided effective-gap approximation.
+The through-slot model adds crossing and opposite-side reopening, but still
+does not resolve local fluid dynamics, contact, leakage, or detailed reedplate
+geometry. `clipped` remains the default.
+
+The current provisional through-slot thresholds are 1 micrometre on each side.
+Each rest offset is initialized as `rest_gap + positive_threshold`, so the
+through-slot model has the same opening area as the clipped model at zero
+displacement. These geometric defaults are not measured reedplate calibration.
 
 ## 5. Optional moving-reed flow
 
@@ -239,7 +262,8 @@ loading, and direct numerical integration.
 The main remaining work is physical refinement rather than adding a synthetic
 audio layer:
 
-- refine the clipped opening/contact closure
+- calibrate the signed opening offsets and closing thresholds against reed and
+  reedplate geometry
 - tune physical parameters for stronger nonlinear flow while preserving
   stability
 - document any future acoustic load more explicitly

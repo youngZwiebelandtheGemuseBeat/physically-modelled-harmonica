@@ -17,6 +17,9 @@ class ReedParameters:
     slot_width_m: float
     rest_gap_m: float
     gap_displacement_scale: float
+    through_slot_rest_offset_m: float
+    through_slot_positive_threshold_m: float
+    through_slot_negative_threshold_m: float
     discharge_coefficient: float
     motion_area_m2: float
 
@@ -39,6 +42,7 @@ class ModelParameters:
     vocal_tract_impedance_pa_s_m3: float
     vocal_tract_feedback_gain: float
     motion_flow_enabled: bool
+    opening_model: str = "clipped"
 
     @property
     def vocal_tract_omega_rad_s(self) -> float:
@@ -68,6 +72,9 @@ def reed_from_frequency(
     gap_displacement_scale: float,
     discharge_coefficient: float,
     motion_area_m2: float,
+    through_slot_rest_offset_m: float | None = None,
+    through_slot_positive_threshold_m: float = 1.0e-6,
+    through_slot_negative_threshold_m: float = 1.0e-6,
 ) -> ReedParameters:
     """Derive oscillator stiffness and damping from frequency and Q."""
 
@@ -80,6 +87,13 @@ def reed_from_frequency(
         slot_width_m=slot_width_m,
         rest_gap_m=rest_gap_m,
         gap_displacement_scale=gap_displacement_scale,
+        through_slot_rest_offset_m=(
+            rest_gap_m + through_slot_positive_threshold_m
+            if through_slot_rest_offset_m is None
+            else through_slot_rest_offset_m
+        ),
+        through_slot_positive_threshold_m=through_slot_positive_threshold_m,
+        through_slot_negative_threshold_m=through_slot_negative_threshold_m,
         discharge_coefficient=discharge_coefficient,
         motion_area_m2=motion_area_m2,
     )
