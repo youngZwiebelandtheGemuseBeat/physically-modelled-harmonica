@@ -1,47 +1,74 @@
-# physically-modelled-harmonica
-Physical modeling of one channel of a diatonic harmonica.
+# Physically Modelled Harmonica
 
-This is an offline Python prototype. It renders audio from the coupled reed,
-Bernoulli flow, chamber pressure, and reduced vocal-tract equations; it does
-not use samples, wavetables, fake saw/filter synthesis, pitch shifting, machine
-learning, bend demonstrations, realtime audio, a GUI, or C++.
+This is an offline reduced physical model of one diatonic harmonica channel for
+a class project.
 
-For a defense-oriented map of the important files and model workflow, read
-`docs/CODE_WALKTHROUGH.md`.
+The implementation solves a seven-state ODE containing blow reed motion, draw
+reed motion, chamber pressure, and a reduced vocal-tract pressure state. It uses
+no samples, no wavetable synthesis, and no pitch shifting.
 
-## Render Modes
+## Run
 
-```text
-python run.py --mode draw
-python run.py --mode blow
-python run.py --mode both
+```bash
+.venv/bin/python run.py --mode draw
+.venv/bin/python run.py --mode blow
+.venv/bin/python run.py --mode both
+.venv/bin/python run.py --mode both --motion-flow off --output-dir outputs_motion_flow_off
+.venv/bin/python run.py --mode both --motion-flow on --output-dir outputs_motion_flow_on
+.venv/bin/python run.py --mode both --motion-flow off --tract-feedback-gain 0.0 --output-dir tract_feedback_000
+.venv/bin/python run.py --mode both --motion-flow off --tract-feedback-gain 0.05 --output-dir tract_feedback_005
+.venv/bin/python run.py --mode both --motion-flow off --tract-feedback-gain 0.10 --output-dir tract_feedback_010
 ```
 
-`python run.py` defaults to `--mode draw`.
+Optional simple controls:
 
-Outputs:
-
-- `outputs/draw_note.wav`
-- `outputs/draw_note_trace.csv`
-- `outputs/draw_note_diagnostics.png`
-- `outputs/draw_note_report.md`
-- `outputs/blow_note.wav`
-- `outputs/blow_note_trace.csv`
-- `outputs/blow_note_diagnostics.png`
-- `outputs/blow_note_report.md`
-- `outputs/comparison_report.md`
-- `outputs/comparison_diagnostics.png`
-
-## Pressure Sign Convention
-
-Positive mouth pressure means the player blows into the channel. Negative mouth
-pressure means draw suction at the mouth side. The implemented pressure drops
-are:
-
-```text
-DeltaP_b = p_m - p_c
-DeltaP_d = p_c - p_out
+```bash
+.venv/bin/python run.py --mode draw --duration 1.5 --pressure 750 --attack 0.2 --motion-flow off
 ```
 
-The draw preset uses negative `p_m` and is expected to be draw-reed dominant.
-The blow preset uses positive `p_m` and is expected to be blow-reed dominant.
+If the virtual environment is activated, `python run.py ...` is equivalent.
+
+## Outputs
+
+The commands write:
+
+- `output/output-1/draw_pressure.wav`
+- `output/output-1/draw_trace.csv`
+- `output/output-1/draw_validation.png`
+- `output/output-1/blow_pressure.wav`
+- `output/output-1/blow_trace.csv`
+- `output/output-1/blow_validation.png`
+
+If `--output-dir` is omitted, `run.py` creates the next available `output-N`
+directory inside the project-root `output/` directory, creating `output/` first
+if needed. If `--output-dir` is passed, it is treated as a subdirectory of
+`output/`, for example `--output-dir outputs_motion_flow_off` writes to
+`output/outputs_motion_flow_off/`. Passing `--output-dir output/name` is also
+accepted, but paths outside `output/` are rejected.
+
+The WAV is normalized chamber pressure from the solved physical model, not an
+external radiation model.
+
+## Demo status
+
+The branch implements the main proposal blocks: reed dynamics, pressure forces,
+Bernoulli/orifice airflow, chamber-pressure feedback, a reduced vocal-tract
+resonator, and direct offline numerical integration. It is ready to demonstrate
+as a reduced proposal-based prototype.
+
+The branch does not claim commercial-quality realism. The strongest remaining
+physical simplifications are the clipped linear reed-opening/contact law, the
+absence of external radiation or body/cover acoustics, and the reduced
+one-mode vocal-tract load.
+
+The project proposal remains the binding model source. Supporting literature
+is used as context: Bilbao for direct numerical physical modeling,
+Fletcher for nonlinear instrument/free-reed behavior, and Rossing for general
+acoustics background.
+
+## Documentation
+
+- `docs/MODEL_EQUATIONS.md` lists the implemented equations.
+- `docs/SOURCE_MAPPING.md` maps equations and functions to proposal source categories.
+- `docs/LIMITATIONS.md` states what is deliberately excluded.
+- `docs/IMPLEMENTATION_OVERVIEW.md` explains the implementation structure.

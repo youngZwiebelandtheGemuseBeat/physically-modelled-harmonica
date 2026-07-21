@@ -1,124 +1,123 @@
 # Model Equations
 
-This project is a Python offline physical modelling prototype of one channel of
-a diatonic harmonica. The implementation must stay tied to the proposal
-equations below.
+This implementation solves one reduced diatonic harmonica channel with the
+state vector
 
-Milestone 1 produced a stable render pipeline and a non-silent sound. That sound
-is not expected to be recognizably harmonica-like yet, because a single mostly
-linear reed oscillator produces a sine-like tone. The harmonica identity must
-come from the full coupled physical model:
+$$
+[x_b,\ v_b,\ x_d,\ v_d,\ p_c,\ p_t,\ v_t]
+$$
 
-1. blow and draw reeds as damped oscillators
-2. Bernoulli-based nonlinear airflow through reed openings
-3. chamber pressure feedback
-4. reduced vocal-tract/acoustic load
-5. physically derived output from chamber pressure and/or flow
+$x_b, v_b$ are blow reed displacement and velocity. $x_d, v_d$ are draw reed
+displacement and velocity. $p_c$ is chamber pressure. $p_t, v_t$ are the
+reduced vocal-tract pressure state and its derivative.
 
-## State Vector
+$p_{m,\mathrm{static}}$ is the imposed breath pressure envelope. The
+mouth-side pressure after reduced vocal-tract loading is:
 
-Milestone 2 must implement the full proposal state vector:
+$$
+p_{m,\mathrm{effective}} = p_{m,\mathrm{static}} - \eta_t p_t
+$$
 
-```text
-y = [x_b, v_b, x_d, v_d, p_c, p_t, v_t]
-```
+where $\eta_t$ is `vocal_tract_feedback_gain`.
 
-where `x_b` and `x_d` are blow and draw reed displacements, `v_b` and `v_d`
-are reed velocities, `p_c` is chamber pressure, `p_t` is reduced vocal-tract
-pressure, and `v_t = p_t'`.
+## Implemented Equations
 
-## Reed Dynamics
+1. Reed dynamics
 
-For each reed `i`:
+   $$
+   m_i \ddot{x}_i + r_i \dot{x}_i + k_i x_i = F_i
+   $$
 
-```text
-m_i x_i'' + r_i x_i' + k_i x_i = F_air
-```
+   Implemented in `harmonica_minimal.equations.state_derivative`.
 
-Use this as a damped mass-spring oscillator with pressure-driven forcing.
+2. Blow reed force
 
-## Pressure Forces
+   $$
+   F_b = S_b(p_{m,\mathrm{effective}} - p_c)
+   $$
 
-Blow reed force:
+   Implemented in `harmonica_minimal.equations.blow_reed_force`.
 
-```text
-F_b = S_b (p_m - p_c)
-```
+3. Draw reed force
 
-Draw reed force:
+   $$
+   F_d = S_d(p_c - p_{\mathrm{out}})
+   $$
 
-```text
-F_d = S_d (p_c - p_out)
-```
+   Implemented in `harmonica_minimal.equations.draw_reed_force`.
 
-## Bernoulli Airflow
+4. Reed opening
 
-Blow-side flow:
+   $$
+   A_i(x_i) = W_i \max(0, h_{i,0} + \alpha_i x_i)
+   $$
 
-```text
-Q_b = C_b A_b(x_b) sgn(p_m - p_c) sqrt(2 |p_m - p_c| / rho)
-```
+   Implemented in `harmonica_minimal.equations.reed_gap` and
+   `harmonica_minimal.equations.opening_area`.
 
-Draw-side flow:
+5. Bernoulli/orifice gap flow
 
-```text
-Q_d = C_d A_d(x_d) sgn(p_c - p_out) sqrt(2 |p_c - p_out| / rho)
-```
+   $$
+   Q_{\mathrm{gap},i}
+   =
+   C_i A_i(x_i)
+   \operatorname{sgn}(\Delta p_i)
+   \sqrt{\frac{2|\Delta p_i|}{\rho}}
+   $$
 
-`A_b(x_b)` and `A_d(x_d)` are physical reed opening functions. Milestone 3B uses
-the explicit form:
+   Implemented in `harmonica_minimal.equations.bernoulli_gap_flow`.
 
-```text
-A_b = max(A_min, W_b max(0, h_b0 + sigma_b x_b))
-A_d = max(A_min, W_d max(0, h_d0 + sigma_d x_d))
-```
+   For the blow side, $\Delta p_b = p_{m,\mathrm{effective}} - p_c$.
+   For the draw side, $\Delta p_d = p_c - p_{\mathrm{out}}$.
 
-The sign of `sigma_i` defines whether positive displacement opens or closes the
-slot. Rest openings, closure clipping, and documented closure damping are
-allowed as physical reed-slot approximations, but they must not become fake
-synthesis sources.
+6. Optional moving-reed flow
 
-## Chamber Pressure
+   $$
+   Q_{\mathrm{motion},i} = S_{\mathrm{motion},i}\dot{h}_i
+   $$
 
-```text
-p_c' = rho c^2 / V_c * (Q_b - Q_d)
-```
+   $\dot{h}_i$ is approximated as $\alpha_i \dot{x}_i$, the derivative of the linear gap
+   law. Implemented in `harmonica_minimal.equations.motion_flow`. It is off by
+   default and switchable with `--motion-flow on/off`.
 
-The chamber pressure must feed back into reed forces and the flow equations.
-The implementation keeps this proposal term explicit and adds one documented
-loss extension:
+7. Total reed flow
 
-```text
-Q_loss = G_c p_c
-p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)
-```
+   $$
+   Q_i = Q_{\mathrm{gap},i} + Q_{\mathrm{motion},i}
+   $$
 
-`G_c` is small and pressure-proportional. It represents unresolved chamber,
-slot, cover-plate, and radiation losses so the chamber is not an ideal sealed
-lossless compliance during note release. Setting `G_c = 0` recovers the proposal
-equation exactly.
+   Implemented in `harmonica_minimal.equations.total_reed_flow`.
 
-## Acoustic Load
+8. Chamber pressure
 
-Impedance definition:
+   $$
+   \dot{p}_c = \frac{\rho c^2}{V_c}(Q_b - Q_d)
+   $$
 
-```text
-Z(omega) = P(omega) / Q(omega)
-```
+   Implemented in `harmonica_minimal.equations.chamber_pressure_derivative`.
 
-Reduced vocal-tract resonator:
+9. Reduced vocal-tract resonator
 
-```text
-p_t'' + (omega_t / Q_t) p_t' + omega_t^2 p_t
-= omega_t^2 Z_t (Q_b - Q_d)
-```
+   $$
+   \ddot{p}_t
+   +
+   \frac{\omega_t}{Q_t}\dot{p}_t
+   +
+   \omega_t^2 p_t
+   =
+   \omega_t^2 Z_t(Q_b - Q_d)
+   $$
 
-The tract state is a reduced acoustic load, not a separate synthetic oscillator
-used to fake timbre.
+   Implemented in `harmonica_minimal.equations.state_derivative`.
 
-## Output Signal
+   The tract pressure $p_t$ is also used in
+   $p_{m,\mathrm{effective}} = p_{m,\mathrm{static}} - \eta_t p_t$.
+   $p_{m,\mathrm{effective}}$ is used in the blow-side pressure drop and the
+   blow-reed force. Setting $\eta_t=0$ recovers the previous one-way tract
+   state behavior. This remains a reduced lumped acoustic load, not a full
+   vocal-tract geometry simulation.
 
-The rendered audio must be physically derived from simulated chamber pressure
-and/or flow, for example `p_c`, `Q_b`, `Q_d`, `p_t`, or a weighted physical
-combination. It must not use samples, wavetables, sawtooth/filter fake harmonica
-synthesis, pitch shifting, bend demonstrations, or machine learning.
+## Output
+
+The WAV is normalized chamber pressure from the solved physical model, not an
+external radiation model.

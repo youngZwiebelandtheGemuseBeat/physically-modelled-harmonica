@@ -1,119 +1,86 @@
-# Code Walkthrough For Defending The Model
+# Code walkthrough
 
-This project renders one diatonic harmonica channel from an offline physical
-model. It does not use samples, wavetables, pitch shifting, or a separate synth
-oscillator. The sound comes from a coupled reed/air/chamber/tract model.
+## Simulation and output path
 
-## Most Important Files
+`src/harmonica_minimal/simulate.py` integrates the seven-state ODE and returns a
+`SimulationResult`. The physical state traces include chamber pressure `p_c`,
+tract pressure `p_t`, and both reed displacements. The result also carries the
+derived blow and draw flows evaluated from the solved state.
 
-1. `src/harmonica_model/equations.py`
-   - The core physics engine.
-   - Contains the reed mass-spring-damper equations, pressure forces,
-     Bernoulli flow equations, chamber pressure equation, chamber loss term,
-     and reduced vocal-tract resonator.
-   - If you need to defend the formulas, start here.
+`src/harmonica_minimal/output.py` selects chamber pressure for the WAV and peak
+normalizes it. An optional command-line DC blocker affects the WAV path only.
+The current seminar model does not implement a separate radiation filter, body
+or cover coloration, or an added flow-noise layer. Consequently, with the
+default WAV settings the relative spectrum of `audio` should match `p_c`; the
+cause audit keeps them separate so that this remains testable if the output
+layer is extended later.
 
-2. `src/harmonica_model/params.py`
-   - The parameter sheet.
-   - Defines the physical constants, reed masses/stiffness/damping/openings,
-     chamber volume, mouth pressure, vocal-tract load, and radiation settings.
-   - Draw and blow differ by parameters and pressure sign, not by a different
-     synthesis algorithm.
+## Cause audit
 
-3. `src/harmonica_model/controls.py`
-   - The player input model.
-   - Builds the smooth breath envelope and signed mouth pressure used inside
-     the equations before the ODE is solved.
-   - Important defense point: this is a physical drive signal, not a fade
-     applied to the finished audio.
+`src/harmonica_minimal/diagnostics.py` is a read-only diagnostic layer. It does
+not feed values back into the ODE, change model parameters, or alter the signal
+written to the WAV. For each mode it compares:
 
-4. `src/harmonica_model/render.py`
-   - The offline solver pipeline.
-   - Calls `scipy.integrate.solve_ivp()` on the coupled ODE, interpolates the
-     solved state to audio rate, and stores all diagnostic traces.
-   - This is where the time simulation actually happens.
+- rendered audio
+- chamber and tract pressure (`p_c`, `p_t`)
+- blow flow, draw flow, and net flow
+- blow and draw reed displacement (`x_b`, `x_d`)
 
-5. `src/harmonica_model/audio.py`
-   - The output/radiation layer.
-   - Converts simulated pressure and flow states into the final WAV signal with
-     conservative high-pass, differentiation, body coloration, and optional
-     flow-driven noise.
-   - Important defense point: this layer uses simulated states only; it does
-     not create a new note source.
+Each trace receives a full-note spectrum and a steady-state-only spectrum. The
+steady window begins after the attack plus a safety margin and ends before the
+release minus a safety margin. For normal renders it is limited to the latest one
+second before that endpoint so that post-attack settling is not averaged into a
+stationary spectrum. The current envelope has no pre-delay, so its derived
+pre-delay is zero. Very short smoke-test renders use a bounded fallback window
+instead of failing.
 
-## Supporting But Still Important Files
+Every spectrum removes the mean, applies a Hann window, and uses `rFFT` with
+`rfftfreq`. Magnitudes are normalized to the largest component and expressed as
+relative dB with a finite floor. This shared method makes the core ODE states
+directly comparable with the output/radiation layer without changing either.
 
-6. `src/harmonica_model/diagnostics.py`
-   - Writes CSV traces, diagnostic plots, and model audit reports.
-   - Useful for showing that both reeds, chamber pressure, tract pressure, and
-     Bernoulli flows actually participate.
+## Interpreting full-note and steady-state spectra
 
-7. `src/harmonica_model/analysis.py`
-   - Measures rendered or reference audio.
-   - Computes fundamental frequency, harmonic energy, spectral centroid,
-     rolloff, attack time, and reference similarity.
+A full-note FFT includes the breath attack and release. Multiplying an
+oscillation by this time envelope can spread energy around a harmonic, while a
+finite FFT record and its window determine bin spacing and leakage. A feature
+that appears only in the full-note spectrum can therefore be associated with
+the note boundary or analysis choice; persistence in steady-state `p_c`, flow,
+or reed motion places the observation earlier in the physical-model path.
 
-8. `run.py`
-   - The command-line entry point.
-   - Selects draw/blow/both mode, applies CLI settings, runs renders, writes
-     output artifacts, and starts sweeps or calibration.
+The H1–H6 detector reports significant noncentral peaks with the neutral phrases
+“sideband-like component detected” and “sideband-like component not detected.”
+These shoulders are diagnostic observations. Their presence does not by itself
+validate them as physical harmonica behavior, and their absence can depend on
+duration, FFT resolution, the Hann window, and the documented detector
+thresholds.
 
-9. `tests/`
-   - Regression checks proving sign conventions, closed-flow behavior, chamber
-     pressure signs, non-silent renders, output modes, and draw/blow separation.
+Normal runs add these files for every selected mode:
 
-## End-To-End Workflow
+- `<mode>_note_cause_audit.png`
+- `<mode>_note_cause_audit.md`
 
-1. `run.py` chooses a preset from `params.py`.
-2. `controls.py` computes signed mouth pressure over time.
-3. `render.py` asks SciPy to solve the ODE.
-4. During the solve, `equations.py` repeatedly computes reed forces, openings,
-   Bernoulli flows, chamber pressure feedback, and vocal-tract pressure.
-5. `render.py` interpolates the solved state to audio sample rate and stores
-   trace arrays.
-6. `audio.py` turns simulated pressure/flow states into the final audio signal.
-7. `diagnostics.py` and `analysis.py` write reports proving what happened.
+When both modes are rendered, the run also writes
+`blow_draw_spectral_window_audit.png`, which compares full-note and late
+chamber-pressure spectra using the same axes and method.
 
-## Core State Vector
+The presentation and validation pressure panels distinguish the prescribed
+mouth boundary `p_m`, the outside reference `p_out = 0`, and the solved chamber
+state `p_c`. For the default `+/-250 Pa` run, blow and draw use the same symmetric
+`-260 Pa` to `+260 Pa` ordinate. This is a display-only comparison choice: it
+does not clamp pressure, change the ODE, or alter the WAV. For larger command-line
+pressure overrides the limit expands automatically to avoid clipping.
 
-The ODE state is:
+## Blow/draw operating presets
 
-```text
-[x_b, v_b, x_d, v_d, p_c, p_t, v_t]
-```
+The default source boundaries now have equal magnitude: `+250 Pa` for blow and
+`-250 Pa` for draw. The former `-700 Pa` draw default was bend-scale rather than
+normal-play scale and was removed. This is a physical-model parameter change,
+so it changes the draw trace and WAV; the cause audit itself remains read-only.
 
-- `x_b`, `v_b`: blow reed displacement and velocity.
-- `x_d`, `v_d`: draw reed displacement and velocity.
-- `p_c`: chamber pressure.
-- `p_t`: reduced vocal-tract pressure.
-- `v_t`: vocal-tract pressure derivative.
-
-## Core Equations Implemented
-
-- Reed oscillator:
-  `m_i x_i'' + r_i x_i' + k_i x_i = F_air`
-- Blow reed force:
-  `F_b = S_b (p_m - p_c)`
-- Draw reed force:
-  `F_d = S_d (p_c - p_out)`
-- Blow-side Bernoulli flow:
-  `Q_b = C_b A_b(x_b) sgn(p_m - p_c) sqrt(2 |p_m - p_c| / rho)`
-- Draw-side Bernoulli flow:
-  `Q_d = C_d A_d(x_d) sgn(p_c - p_out) sqrt(2 |p_c - p_out| / rho)`
-- Chamber pressure:
-  `p_c' = rho c^2 / V_c * (Q_b - Q_d - Q_loss)`
-- Chamber loss extension:
-  `Q_loss = G_c p_c`
-- Vocal tract:
-  `p_t'' + (omega_t / Q_t) p_t' + omega_t^2 p_t = omega_t^2 Z_t (Q_b - Q_d)`
-
-## Defense Points
-
-- The nonlinear harmonic content comes mainly from pressure-dependent Bernoulli
-  flow through reed openings that change with reed displacement.
-- Draw and blow are separated by signed mouth pressure, active reed parameters,
-  reed-slot closure regime, tract loading, and output balance.
-- The output stage is not the physical core; it is a radiation approximation
-  applied after the coupled ODE has produced pressure and flow states.
-- The reports and tests are part of the evidence that the implementation
-  follows the stated physics.
+The two modes still share the source-oriented reed resonance, mass, and quality
+factor data but use different effective gaps, pressure areas, and discharge
+coefficients. These are reduced operating closures for the proposal's series
+pressure-flow equations, not a claim that channel 4 changes geometry with flow
+direction. Consequently, the draw output is a qualitative normal-pressure
+operating regime and not an independently validated fixed-geometry prediction.

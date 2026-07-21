@@ -225,3 +225,20 @@ outputs/
 .DS_Store
 .codex/
 .TODO.md
+
+# never commit any output directories or source documents
+output/
+sources/
+documentation/
+tmp/
+
+# do not commit local markdown files
+AGENTS.md
+
+# credentials and private keys
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
